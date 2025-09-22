@@ -1,0 +1,63 @@
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.4;
+  font-weight: 400;
+  color: #333;
+  background-color: #f0f0f0;
+}
+
+body {
+  margin: 0;
+  background: #f0f0f0;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.el-button--primary {
+  background-color: #fff;
+  border-color: #222;
+  color: #222;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus,
+.el-button--primary:active {
+  background-color: #f5f5f5;
+  border-color: #111;
+  color: #111;
+}
+
+.el-button--primary.is-link,
+.el-button--primary.is-text,
+.el-button--primary.is-plain {
+  color: #222;
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.el-button--primary.is-link:hover,
+.el-button--primary.is-text:hover,
+.el-button--primary.is-plain:hover,
+.el-button--primary.is-link:focus,
+.el-button--primary.is-text:focus,
+.el-button--primary.is-plain:focus,
+.el-button--primary.is-link:active,
+.el-button--primary.is-text:active,
+.el-button--primary.is-plain:active {
+  color: #111;
+  background-color: transparent;
+  border-color: transparent;
+}
