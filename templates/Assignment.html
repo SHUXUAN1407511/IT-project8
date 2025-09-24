@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assignment Page</title>
+</head>
+<body>
+  <form action="" method="post">
+<!--    {% csrf_token %}-->
+
+    <div class="form-group">
+      <label for="subject">Subject</label>
+      <input type="text" class="form-control" id="subject"
+             name="subject" placeholder="e.g. IT Project (COMP30022)">
+    </div>
+
+    <div class="form-group">
+      <label for="AssignmentTitle">Assignment Title</label>
+      <input type="text" class="form-control" id="AssignmentTitle"
+             name="assignment_title" placeholder="Assignment Title">
+    </div>
+
+    <div class="form-group">
+      <label for="DueDate">Due date</label>
+      <input type="datetime-local" class="form-control" id="DueDate"
+             name="due_date" placeholder="Due date">
+    </div>
+
+    <div class="form-group">
+      <label for="AssignmentType">Assignment Type</label>
+      <select class="form-control" id="AssignmentType" name="assignment_type">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <button type="submit" class="btn-primary">Create</button>
+    </div>
+  </form>
+</body>
+</html>

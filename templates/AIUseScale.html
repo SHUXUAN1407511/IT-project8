@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Six Blocks Form</title>
+    <style>
+      label.form-label { display:block; margin-bottom:.5rem; }
+      textarea { min-height:180px; resize:vertical; }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+  <h1 class="mb-4">六个输入区</h1>
+  <form method="post" action="">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label for="block1" class="form-label">标题 1</label>
+      <textarea id="block1" name="block1" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="block2" class="form-label">标题 2</label>
+      <textarea id="block2" name="block2" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="block3" class="form-label">标题 3</label>
+      <textarea id="block3" name="block3" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="block4" class="form-label">标题 4</label>
+      <textarea id="block4" name="block4" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="block5" class="form-label">标题 5</label>
+      <textarea id="block5" name="block5" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="block6" class="form-label">标题 6</label>
+      <textarea id="block6" name="block6" class="form-control" placeholder="在这里输入内容…"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">提交</button>
+  </form>
+</div>
+</body>
+</html>
