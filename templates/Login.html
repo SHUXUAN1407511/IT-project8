@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+
+<main class = "container bg-white p-3 rounded">
+    <div style = "max-width: 400px;"class = "margin: 0 auto;">
+        <h1>Login</h1>
+        <form action="" method="post">
+            <div class = "mb-3">
+                <label>username</label>
+                <input type = "text" value="" name = "username" class="form-control" placeholder = "Enter username">
+            </div>
+            <div class = "mb-3">
+                <label>password</label>
+                <input type = "password" value="" name = "password" class="form-control" placeholder = "Enter password">
+            </div>
+            <div class = "mb-3 btn-group" role="group" aria-label="...">
+                <button class="btn-primary" name="submit">Login</button>
+                <button type="button" class="btn btn-primary"
+                        onclick="location.href='{% url 'usersystem:register' %}'">Register</button>
+            </div>
+        </form>
+    </div>
+</main>
+</body>
+</html>
