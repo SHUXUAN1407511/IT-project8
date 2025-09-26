@@ -1,7 +1,5 @@
 from django import forms
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
+from .models import User
 
 class LoginForm(forms.Form):
     username = forms.CharField(label='username', max_length=100)
@@ -27,4 +25,3 @@ class RegisterForm(forms.Form):
         if p1 and p2 and p1 != p2:
             self.add_error('confirmpassword', 'Passwords do not match')
         return cleaned
-

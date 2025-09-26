@@ -1,12 +1,7 @@
-from django.urls import path, include
-from . import views
-
-app_name = 'usersystem'
+from django.urls import path
+from .views import RegisterView, LoginView  # 按你的 app 名称调整
 
 urlpatterns = [
-    path('login',views.login,name='login'),
-    path('register',views.register,name='register'),
-    path('user/query', views.query_user, name='query_user'),
-    path('user/delete', views.delete_user, name='delete_user'),
-    path('user/update', views.update_user, name='update_user'),
+    path("api/register", RegisterView.as_view()),
+    path("api/login", LoginView.as_view()),
 ]

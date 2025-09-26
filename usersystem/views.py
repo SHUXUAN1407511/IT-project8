@@ -1,65 +1,59 @@
-from django.shortcuts import render,HttpResponse, redirect
-from .forms import LoginForm,RegisterForm
-from django.contrib.auth import get_user_model
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.contrib.auth.hashers import check_password
+from .models import User
+from .serializer import UserSerializer
 
-User = get_user_model()
+def success(data=None, msg="success", status=200):
+    return Response({
+        "data": data or {},
+        "meta": {"status": status,
+                 "message": msg}
+    })
 
-# Create your views here.
-def login(request):
-    if request.method == 'GET':
-        return render(request, 'login.html')
-    else:
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
+def fail(msg="bad request", status=400, data=None):
+    return Response({
+        "data": data or {},
+        "meta": {"status": status,
+                 "message": msg}
+    })
+
+class RegisterView(APIView):
+    """
+    POST /api/register
+    body: { "username": "abcxyz", "password": "123456" }
+    """
+    def post(self, request):
+        ser = UserSerializer(data=request.data)
+        if not ser.is_valid():
+            return fail(msg="validation error", status=400, data=ser.errors)
+
+        username = ser.validated_data["username"]
+        if User.objects.filter(username=username).exists():
+            return fail(msg="username already exists", status=400)
+
+        user = ser.save()
+        return success(data={"id": user.id, "username": user.username}, msg="registered", status=200)
+
+class LoginView(APIView):
+    """
+    POST /api/login
+    body: { "username": "abcxyz", "password": "123456" }
+    """
+    def post(self, request):
+        username = (request.data.get("username") or "").strip()
+        password = (request.data.get("password") or "")
+
+        if not username or not password:
+            return fail("username and password required", 400)
+
+        try:
             user = User.objects.get(username=username)
-            if user.check_password(password):
-                return redirect('Assignment:create_assignment')
-        return render(request, 'login.html', {'form': form})
+        except User.DoesNotExist:
+            return fail("username or password incorrect", 401)
 
+        if not check_password(password, user.password):
+            return fail("username or password incorrect", 401)
 
-def register(request):
-    if request.method == 'GET':
-        return render(request, 'register.html')
-    else:
-        form = RegisterForm(request.POST or None)
-        if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
-            confirmation = form.cleaned_data.get('confirmpassword')
-            User.objects.create_user(username=username, password=password)
-            return redirect('usersystem:login')
-        else:
-            print(form.errors)
-            return render(request, 'register.html', {'form': form})
-
-def query_user(request):
-    # users = Usersystem.objects.all()
-    # sort by order
-    users = User.objects.order_by('username')
-    ## search user with feature
-    # users = Usersystem.objects.filter(username='shuxuan1')
-    for user in users:
-        print(user.username, user.password)
-    # try:
-    #     user = Usersystem.objects.get(username='shuxuan1111')
-    #     print(user.password)
-    # except Usersystem.DoesNotExist:
-    #     return HttpResponse("User not found!")
-    return HttpResponse("Query user successfully!")
-
-def update_user(request):
-    newuser = User.objects.get(username='shuxuan1')
-    newuser.password = ''
-    newuser.save()
-    return HttpResponse("Update user successfully!")
-
-
-def delete_user(request):
-    user = User.objects.get(id=4,username='shuxuan1')
-    user.delete()
-    return HttpResponse("Delete user successfully!")
-
-
-
+        # if requires JWT， djangorestframework-simplejwt
+        return success(data={"id": user.id, "username": user.username}, msg="login success", status=200)
