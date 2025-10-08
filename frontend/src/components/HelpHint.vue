@@ -1,7 +1,3 @@
-<!--
-页面左下角圆圈问号：点击跳出弹窗，不同页面有不同hints
--->
-
 <template>
   <div
     v-if="hasHint"

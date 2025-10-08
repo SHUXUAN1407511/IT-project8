@@ -1,4 +1,3 @@
-// API调用
 import router from '@/router';
 import { ElMessage } from 'element-plus';
 import { appConfig } from '@/config';
@@ -14,7 +13,8 @@ const safeMethods: HttpMethod[] = ['GET'];
 
 function isSafeMethod(method?: string) {
   if (!method) return true;
-  return safeMethods.includes(method.toUpperCase() as HttpMethod) || ['HEAD', 'OPTIONS'].includes(method.toUpperCase());
+  const upper = method.toUpperCase();
+  return safeMethods.includes(upper as HttpMethod) || upper === 'HEAD' || upper === 'OPTIONS';
 }
 
 function getCsrfToken() {

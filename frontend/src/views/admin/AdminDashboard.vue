@@ -1,34 +1,52 @@
-<!--
-Admin dashboard: Entry points for scale management, notifications, and overview.
--->
-
 <template>
   <div class="dashboard">
-    <h2>Admin Overview</h2>
+    <h2>Administrator Overview</h2>
 
-    <section class="summary">
-      <div
-        v-for="card in summaryCards"
-        :key="card.title"
-        class="summary-item"
-      >
-        <strong>{{ card.title }}</strong>
-        <span class="value">{{ card.value }}</span>
-        <span class="note">{{ card.extra }}</span>
-      </div>
-    </section>
+    <el-row :gutter="16" class="cards">
+      <el-col :span="8" v-for="card in summaryCards" :key="card.title">
+        <el-card shadow="hover">
+          <div class="card-title">{{ card.title }}</div>
+          <div class="card-value">{{ card.value }}</div>
+          <div class="card-extra">{{ card.extra }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
 
-    <section class="notice">
-      <h3>Recent Notifications</h3>
-      <p v-if="!recentNotices.length">No notifications.</p>
-      <ul v-else>
-        <li v-for="notice in recentNotices" :key="notice.id">
-          <div class="title">{{ notice.title }}</div>
-          <div class="time">{{ formatDate(notice.createdAt) }}</div>
-        </li>
-      </ul>
-      <button type="button" @click="router.push('/notifications')">View All Notifications</button>
-    </section>
+    <el-row :gutter="16" class="sections">
+      <el-col :span="12">
+        <el-card shadow="never" class="panel">
+          <div class="panel-header">
+            <h3>Default Scale – latest version</h3>
+            <el-button type="primary" link @click="router.push('/scales')">Open management</el-button>
+          </div>
+          <el-descriptions :column="1" size="small" border>
+            <el-descriptions-item label="Version">v{{ defaultScale?.currentVersion.version }}</el-descriptions-item>
+            <el-descriptions-item label="Updated by">{{ defaultScale?.currentVersion.updatedBy }}</el-descriptions-item>
+            <el-descriptions-item label="Updated at">{{ formatDate(defaultScale?.currentVersion.updatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="Notes">{{ defaultScale?.currentVersion.notes || '—' }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="never" class="panel">
+          <div class="panel-header">
+            <h3>Latest notifications</h3>
+            <el-button type="primary" link @click="router.push('/notifications')">View all</el-button>
+          </div>
+          <el-timeline v-if="recentNotices.length">
+            <el-timeline-item
+              v-for="notice in recentNotices"
+              :key="notice.id"
+              :timestamp="formatDate(notice.createdAt)"
+              :type="notice.isRead ? 'info' : 'primary'"
+            >
+              {{ notice.title }}
+            </el-timeline-item>
+          </el-timeline>
+          <div v-else class="empty-message">No notifications</div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -40,18 +58,19 @@ import { useDataStore } from '@/store/data';
 const router = useRouter();
 const dataStore = useDataStore();
 
+const defaultScale = computed(() => dataStore.defaultScale);
+
 const summaryCards = computed(() => [
   {
-    title: 'Total Users',
+    title: 'Total users',
     value: dataStore.users.length,
-    extra: 'Admin / SC / Tutor',
   },
   {
     title: 'Courses',
     value: dataStore.courses.length,
   },
   {
-    title: 'Unread Notifications',
+    title: 'Unread notifications',
     value: dataStore.notifications.filter((n) => !n.isRead).length,
   },
 ]);
@@ -60,10 +79,10 @@ const recentNotices = computed(() => dataStore.notifications.slice(0, 3));
 
 function formatDate(value?: string) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
@@ -71,15 +90,14 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.dashboard { display: flex; flex-direction: column; gap: 20px; }
-.summary { display: flex; gap: 12px; flex-wrap: wrap; }
-.summary-item { border: 1px solid #ccc; padding: 12px; width: 200px; background: #fafafa; }
-.summary-item .value { font-size: 24px; display: block; margin: 6px 0; }
-.summary-item .note { font-size: 12px; color: #666; }
-.notice { border: 1px solid #ccc; padding: 16px; background: #fff; }
-.notice button { margin-top: 8px; padding: 6px 10px; border: 1px solid #333; background: #fff; cursor: pointer; }
-.notice ul { margin: 0; padding-left: 16px; }
-.notice li { margin-bottom: 8px; }
-.notice .title { font-weight: 600; font-size: 14px; }
-.notice .time { font-size: 12px; color: #777; }
+.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.subtitle { color: #606266; }
+.cards { margin-top: 8px; }
+.card-title { font-size: 14px; color: #606266; }
+.card-value { font-size: 28px; font-weight: 600; margin: 8px 0; }
+.card-extra { color: #909399; font-size: 12px; }
+.sections { margin-top: 8px; }
+.panel { height: 100%; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.empty-message { padding: 24px 0; text-align: center; color: #909399; }
 </style>

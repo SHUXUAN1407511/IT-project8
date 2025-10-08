@@ -1,41 +1,46 @@
-<!--
-SC dashboard: Manage AI Use Scales, courses, assignments, and tutor permissions.
--->
-
 <template>
   <div class="dashboard">
     <h2>Subject Coordinator Overview</h2>
-    <section class="info">
-      <div class="block">
-        <strong>Courses owned:</strong>
-        <span>{{ myCourses.length }}</span>
-      </div>
-      <div class="block">
-        <strong>Draft templates:</strong>
-        <span>{{ draftTemplates.length }}</span>
-      </div>
-    </section>
 
-    <section class="drafts">
-      <div class="header">
-        <h3>Drafts to finish</h3>
-        <button type="button" @click="router.push('/assignments')">Open assignments</button>
-      </div>
-      <p v-if="!draftTemplates.length"</p>
-      <ul v-else>
-        <li v-for="item in draftTemplates" :key="item.assignment.id">
-          <div class="title">{{ item.assignment.name }}</div>
-          <div class="course">Course: {{ item.course.name }}</div>
-          <button type="button" @click="toTemplate(item.assignment.id)">Edit template</button>
-        </li>
-      </ul>
-    </section>
+    <el-row :gutter="16" class="cards">
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div class="card-title">Courses overview</div>
+          <div class="card-value">{{ myCourses.length }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div class="card-title">Templates pending publication</div>
+          <div class="card-value">{{ draftTemplates.length }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
 
-    <section class="quick-actions">
-      <button type="button" @click="router.push({ name: 'TemplateEditor' })">
-        Open template editor
-      </button>
-    </section>
+    <el-row :gutter="16" class="sections">
+      <el-col :span="24">
+        <el-card shadow="never" class="panel">
+          <div class="panel-header">
+            <h3>Templates to action</h3>
+            <el-button type="primary" link @click="router.push('/assignments')">Go to assignment management</el-button>
+          </div>
+          <el-timeline v-if="draftTemplates.length">
+            <el-timeline-item
+              v-for="item in draftTemplates"
+              :key="item.assignment.id"
+              type="warning"
+            >
+              <div class="timeline-entry">
+                <strong>{{ item.assignment.name }}</strong>
+                <span class="muted"> · {{ item.course.name }}</span>
+                <el-button size="small" link type="primary" @click="toTemplate(item.assignment.id)">Manage template</el-button>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <div v-else class="empty-message">No drafts at the moment</div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -52,6 +57,8 @@ const dataStore = useDataStore();
 const myCourses = computed(() =>
   dataStore.courses.filter((course) => course.scId === userStore.userInfo?.id)
 );
+
+const termCount = computed(() => new Set(myCourses.value.map((course) => course.term)).size);
 
 const myAssignments = computed(() =>
   dataStore.assignments.filter((assignment) => myCourses.value.some((course) => course.id === assignment.courseId))
@@ -72,18 +79,16 @@ function toTemplate(assignmentId: string) {
 </script>
 
 <style scoped>
-.dashboard { display: flex; flex-direction: column; gap: 20px; }
-.subtitle { color: #555; font-size: 14px; }
-.info { display: flex; gap: 12px; flex-wrap: wrap; }
-.block { border: 1px solid #ccc; padding: 12px; background: #fff; min-width: 160px; }
-.quick-actions { display: flex; margin-top: 12px; }
-.quick-actions button { border: 1px solid #555; background: #fff; padding: 6px 12px; cursor: pointer; }
-.drafts { border: 1px solid #ccc; padding: 16px; background: #fff; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.drafts button { border: 1px solid #555; background: #fff; padding: 4px 8px; cursor: pointer; }
-.drafts ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.drafts li { border: 1px solid #eee; padding: 10px; background: #f9f9f9; }
-.title { font-weight: 600; margin-bottom: 4px; }
-.course { font-size: 13px; color: #666; margin-bottom: 6px; }
-.empty { color: #777; }
+.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.subtitle { color: #606266; }
+.cards { margin-top: 8px; }
+.card-title { font-size: 14px; color: #606266; }
+.card-value { font-size: 28px; font-weight: 600; margin: 8px 0; }
+.card-extra { color: #909399; font-size: 12px; }
+.sections { margin-top: 8px; }
+.panel { height: 100%; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.timeline-entry { display: flex; align-items: center; gap: 8px; }
+.muted { color: #909399; }
+.empty-message { padding: 24px 0; text-align: center; color: #909399; }
 </style>

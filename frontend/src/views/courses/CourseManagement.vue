@@ -4,7 +4,11 @@
       <div>
         <h2>Course Management</h2>
       </div>
-      <el-button class="outlined-button" :disabled="!canCreateCourses" @click="openCreateCourse">
+      <el-button
+        type="primary"
+        v-permission="['admin', 'sc']"
+        @click="openCreateCourse"
+      >
         New course
       </el-button>
     </div>
@@ -49,6 +53,85 @@
           />
         </el-select>
       </div>
+    </el-card>
+
+    <el-card shadow="never">
+      <el-table
+        :data="sortedCourses"
+        stripe
+        border
+        @sort-change="onSortChange"
+        height="460"
+        empty-text="No courses yet"
+      >
+        <el-table-column
+          prop="name"
+          label="Course"
+          min-width="220"
+          sortable="custom"
+        >
+          <template #default="{ row }">
+            <div class="course-name">
+              <span class="name">{{ row.name }}</span>
+              <span class="code">{{ row.code }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="term"
+          label="Term"
+          width="140"
+          sortable="custom"
+        />
+        <el-table-column
+          prop="description"
+          label="Description"
+          min-width="260"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="coordinator"
+          label="Coordinator"
+          width="160"
+        >
+          <template #default="{ row }">
+            {{ resolveCoordinator(row.scId)?.name || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updatedAt"
+          label="Last updated"
+          width="180"
+          sortable="custom"
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.updatedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Actions"
+          width="180"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEditCourse(row)"
+            >
+              Edit
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              v-permission="['admin', 'sc']"
+              @click="confirmRemoveCourse(row)"
+            >
+              Delete
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-card>
 
     <el-dialog
@@ -121,13 +204,13 @@ import { Search } from '@element-plus/icons-vue';
 const dataStore = useDataStore();
 const userStore = useUserStore();
 
+
 const searchQuery = ref('');
 const termFilter = ref('');
 const coordinatorFilter = ref('');
 const sortState = ref<{ prop: keyof Course | ''; order: 'ascending' | 'descending' | null }>({ prop: '', order: null });
 
 const isAdmin = computed(() => userStore.role === 'admin');
-const canCreateCourses = computed(() => userStore.role === 'admin' || userStore.role === 'sc');
 
 const coordinatorOptions = computed(() => {
   const list = dataStore.coordinators;
@@ -215,7 +298,7 @@ const courseRules: FormRules = {
     { required: true, message: 'Please enter a course code.', trigger: 'blur' },
   ],
   term: [
-    { required: true, message: 'Please select the academic year and term.', trigger: 'change' },
+    { required: true, message: 'Please select the year and term.', trigger: 'change' },
   ],
   scId: [
     { required: true, message: 'Please choose a coordinator.', trigger: 'change' },
@@ -299,7 +382,7 @@ function confirmRemoveCourse(course: Course) {
 
 function formatDate(value?: string) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -321,6 +404,5 @@ function formatDate(value?: string) {
 .course-name .code { color: #909399; font-size: 12px; }
 .term-selects { display: flex; gap: 8px; width: 100%; }
 .term-item { flex: 1 1 160px; }
-.text-button { color: #222; font-weight: 500; }
 
 </style>

@@ -19,16 +19,14 @@ export const useUserStore = defineStore('user', {
     },
   },
   actions: {
-    async login(payload: { username: string; password: string; role: UserRole }) {
+    async login(payload: { username: string; password: string }) {
       const response = await API.auth.login({
         username: payload.username,
         password: payload.password,
-        role: payload.role,
       });
       this.applyLoginState(payload, response);
     },
     loginAs(role: UserRole) {
-      // Login demo
       const id = `user_${Math.random().toString(36).slice(2, 10)}`;
       this.userInfo = {
         id,
@@ -41,7 +39,7 @@ export const useUserStore = defineStore('user', {
       this.isAuthenticated = true;
       this.credentials = { username: `${role}_user`, password: 'placeholder' };
     },
-    async register(payload: { username: string; password: string; role?: UserRole }) {
+    async register(payload: { username: string; password: string; role: UserRole }) {
       await API.auth.register(payload);
     },
     logout() {
@@ -49,6 +47,7 @@ export const useUserStore = defineStore('user', {
       this.role = '';
       this.isAuthenticated = false;
       this.credentials = null;
+      localStorage.removeItem('token');
     },
     updateProfile(updates: Partial<Omit<AccountProfile, 'id' | 'username' | 'role'>>) {
       if (!this.userInfo) return;
@@ -64,16 +63,16 @@ export const useUserStore = defineStore('user', {
       this.credentials = { ...this.credentials, password: newPassword };
     },
     applyLoginState(
-      payload: { username: string; password: string; role: UserRole },
+      payload: { username: string; password: string },
       response: LoginResponse,
     ) {
       const token = response.token;
       if (token) {
         localStorage.setItem('token', token);
       }
-      const role = response.user?.role || payload.role;
+      const role = response.user?.role;
       if (!role) {
-        throw new Error('Login succeeded but no role was provided.');
+        throw new Error('Login succeeded but no role was returned.');
       }
       const profile: AccountProfile = {
         id: response.user?.id || `user_${Math.random().toString(36).slice(2, 10)}`,

@@ -1,15 +1,33 @@
 <template>
   <div class="scale-page">
-    <h2>AI Use Scale Management</h2>
+    <div class="page-header">
+      <div>
+        <h2>AI Use Scale Management</h2>
+      </div>
+      <el-space :size="8">
+        <el-button
+          type="primary"
+          plain
+          :disabled="!canEditDefault"
+          @click="openLevelDialog(null)"
+        >
+          Add level
+        </el-button>
+        <el-button type="primary" :disabled="!canEditDefault" @click="saveDefaultScale">
+          Save new version
+        </el-button>
+      </el-space>
+    </div>
 
-    <el-row :gutter="16">
-      <el-col :span="24" :lg="12">
+    <el-row :gutter="16" class="content">
+      <el-col :span="24" :lg="16">
         <el-card shadow="never" class="panel">
           <div class="panel-header">
-            <h3>Default scale</h3>
-            <el-button class="outlined-button" :disabled="!canEditDefault" @click="saveDefaultScale">
-              Save new version
-            </el-button>
+            <h3>Default scale levels</h3>
+            <div class="panel-meta">
+              <div>Last updated {{ formatDate(defaultScale?.currentVersion.updatedAt) }}</div>
+              <div>By {{ defaultScale?.currentVersion.updatedBy || '—' }}</div>
+            </div>
           </div>
 
           <el-table
@@ -19,30 +37,29 @@
             size="small"
             empty-text="No levels"
           >
-            <el-table-column prop="label" label="Level" width="80" />
-            <el-table-column prop="title" label="Title" min-width="120" />
-            <el-table-column prop="description" label="Description" min-width="160" show-overflow-tooltip />
-            <el-table-column label="Instructions" min-width="220">
+            <el-table-column prop="label" label="Level" width="120" show-overflow-tooltip />
+            <el-table-column prop="title" label="AI Assessment Scale" min-width="200" show-overflow-tooltip />
+            <el-table-column label="Instructions to Students" min-width="240">
               <template #default="{ row }">
-                <el-input
-                  v-model="row.instructions"
-                  :disabled="!canEditDefault"
-                  type="textarea"
-                  :rows="3"
-                />
+                <span
+                  :class="['cell-text', { muted: !row.instructions } ]"
+                  :title="row.instructions || '—'"
+                >
+                  {{ row.instructions || '—' }}
+                </span>
               </template>
             </el-table-column>
-            <el-table-column label="Acknowledgement" min-width="220">
+            <el-table-column label="AI Acknowledgement" min-width="240">
               <template #default="{ row }">
-                <el-input
-                  v-model="row.acknowledgement"
-                  :disabled="!canEditDefault"
-                  type="textarea"
-                  :rows="3"
-                />
+                <span
+                  :class="['cell-text', { muted: !row.acknowledgement } ]"
+                  :title="row.acknowledgement || '—'"
+                >
+                  {{ row.acknowledgement || '—' }}
+                </span>
               </template>
             </el-table-column>
-            <el-table-column label="Actions" width="120" fixed="right">
+            <el-table-column label="Actions" width="140" fixed="right">
               <template #default="{ row, $index }">
                 <el-button link :disabled="!canEditDefault" @click="openLevelDialog(row)">Edit</el-button>
                 <el-button
@@ -56,17 +73,15 @@
               </template>
             </el-table-column>
           </el-table>
+          <div v-else class="empty-message">No levels configured</div>
+        </el-card>
+      </el-col>
 
-          <div class="panel-footer">
-            <el-button class="outlined-button" :disabled="!canEditDefault" @click="saveDefaultScale">
-              Add level
-            </el-button>
-            <span class="updated-at">Latest version: {{ formatDate(defaultScale?.currentVersion.updatedAt) }}</span>
+      <el-col :span="24" :lg="8">
+        <el-card shadow="never" class="panel history-card">
+          <div class="panel-header">
+            <h3>Version history</h3>
           </div>
-
-          <el-divider />
-
-          <h4>Version history</h4>
           <el-timeline>
             <el-timeline-item
               v-for="version in defaultScale?.history || []"
@@ -89,26 +104,27 @@
               </div>
             </el-timeline-item>
           </el-timeline>
+          <div v-if="!(defaultScale?.history?.length)" class="empty-message">No history yet</div>
         </el-card>
       </el-col>
-
     </el-row>
 
-    <el-dialog v-model="levelDialog.visible" title="Edit scale level" width="520px">
-      <el-form :model="levelDialog.form" label-width="96px">
-        <el-form-item label="Level key">
-          <el-input v-model="levelDialog.form.label" :disabled="levelDialog.isEdit" />
+    <el-dialog
+      v-model="levelDialog.visible"
+      :title="levelDialog.isEdit ? 'Edit scale level' : 'Add scale level'"
+      width="700px"
+    >
+      <el-form :model="levelDialog.form" label-width="150px">
+        <el-form-item label="Level">
+          <el-input v-model="levelDialog.form.label" />
         </el-form-item>
-        <el-form-item label="Title">
+        <el-form-item label="AI Assessment Scale">
           <el-input v-model="levelDialog.form.title" />
         </el-form-item>
-        <el-form-item label="Description">
-          <el-input type="textarea" :rows="2" v-model="levelDialog.form.description" />
-        </el-form-item>
-        <el-form-item label="Instructions">
+        <el-form-item label="Instructions to Students">
           <el-input type="textarea" :rows="3" v-model="levelDialog.form.instructions" />
         </el-form-item>
-        <el-form-item label="Acknowledgement">
+        <el-form-item label="AI Acknowledgement">
           <el-input type="textarea" :rows="3" v-model="levelDialog.form.acknowledgement" />
         </el-form-item>
       </el-form>
@@ -117,7 +133,6 @@
         <el-button type="primary" @click="saveLevel">Save</el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -131,11 +146,21 @@ const dataStore = useDataStore();
 const userStore = useUserStore();
 
 const defaultScale = computed(() => dataStore.defaultScale);
-const defaultLevels = ref<ScaleLevel[]>(defaultScale.value ? defaultScale.value.currentVersion.levels.map((level) => ({ ...level })) : []);
+const defaultLevels = ref<ScaleLevel[]>(
+  defaultScale.value
+    ? defaultScale.value.currentVersion.levels.map((level) => ({
+        ...level,
+        aiUsage: level.aiUsage ?? '',
+      }))
+    : [],
+);
 
 watch(defaultScale, (scale) => {
   if (scale) {
-    defaultLevels.value = scale.currentVersion.levels.map((level) => ({ ...level }));
+    defaultLevels.value = scale.currentVersion.levels.map((level) => ({
+      ...level,
+      aiUsage: level.aiUsage ?? '',
+    }));
   }
 });
 
@@ -154,6 +179,7 @@ const levelDialog = reactive({
     label: '',
     title: '',
     description: '',
+    aiUsage: '',
     instructions: '',
     acknowledgement: '',
   } as ScaleLevel,
@@ -169,6 +195,7 @@ function openLevelDialog(level: ScaleLevel | null) {
         label: '',
         title: '',
         description: '',
+        aiUsage: '',
         instructions: '',
         acknowledgement: '',
       };
@@ -206,7 +233,12 @@ function saveLevel() {
 
 function saveDefaultScale() {
   if (!canEditDefault.value || !defaultScale.value) return;
-  dataStore.saveScaleVersion(defaultScale.value.id, defaultLevels.value, userStore.userInfo?.name || 'Admin', 'Updated default scale');
+  dataStore.saveScaleVersion(
+    defaultScale.value.id,
+    defaultLevels.value,
+    userStore.userInfo?.name || 'Admin',
+    'Updated default scale',
+  );
   ElMessage.success('Default scale saved as a new version.');
 }
 
@@ -215,14 +247,17 @@ function rollbackScale(scaleId: string, versionId: string) {
   dataStore.rollbackScale(scaleId, versionId, userStore.userInfo?.name || 'Admin');
   const latest = dataStore.scales.find((scale) => scale.id === scaleId);
   if (latest && scaleId === defaultScale.value?.id) {
-    defaultLevels.value = latest.currentVersion.levels.map((level) => ({ ...level }));
+    defaultLevels.value = latest.currentVersion.levels.map((level) => ({
+      ...level,
+      aiUsage: level.aiUsage ?? '',
+    }));
   }
   ElMessage.success('New version cloned from history.');
 }
 
 function formatDate(value?: string) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -234,17 +269,15 @@ function formatDate(value?: string) {
 
 <style scoped>
 .scale-page { display: flex; flex-direction: column; gap: 16px; }
-.panel { display: flex; flex-direction: column; gap: 12px; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.panel-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
-.updated-at { color: #909399; font-size: 13px; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+.subtitle { color: #606266; margin: 4px 0 0; max-width: 520px; }
+.content { margin-top: 4px; }
+.panel { display: flex; flex-direction: column; gap: 16px; height: 100%; }
+.panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.panel-meta { font-size: 12px; color: #909399; text-align: right; display: flex; flex-direction: column; gap: 4px; }
+.history-card { min-height: 100%; }
 .version-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cell-text { display: inline-block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #909399; font-size: 13px; }
-.empty-message { margin: 12px 0; padding: 12px; border: 1px dashed #ccc; background: #fff; text-align: center; color: #666; }
-.outlined-button { border: 1px solid #222; background: #fff; color: #222; }
-.outlined-button:hover,
-.outlined-button:focus { background: #f5f5f5; border-color: #111; color: #111; }
-.outlined-button:disabled { border-color: #ccc; color: #bbb; background: #fafafa; }
-.text-button { color: #222; font-weight: 500; }
-.text-button:disabled { color: #bbb; }
+.empty-message { padding: 24px 0; text-align: center; color: #909399; }
 </style>

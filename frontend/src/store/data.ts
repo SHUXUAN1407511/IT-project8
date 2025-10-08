@@ -13,8 +13,6 @@ import type {
   TemplateRow,
   UserRole,
 } from '@/services/api';
-
-// 集中管理课程、作业和模板的状态。
 const deepCopy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const generateId = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -116,9 +114,6 @@ export const useDataStore = defineStore('data', {
       const assignment = this.assignments.find((item) => item.id === id);
       if (!assignment) return;
       Object.assign(assignment, updates);
-      if ('dueDate' in updates) {
-        assignment.dueDate = updates.dueDate;
-      }
     },
     deleteAssignment(id: string) {
       this.assignments = this.assignments.filter((assignment) => assignment.id !== id);

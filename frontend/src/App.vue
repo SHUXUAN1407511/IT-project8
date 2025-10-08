@@ -12,3 +12,6 @@ import MainLayout from '@/layouts/MainLayout.vue';
 const route = useRoute();
 const layout = computed(() => (route.meta.layout === 'main' ? MainLayout : 'div'));
 </script>
+
+<style>
+</style>

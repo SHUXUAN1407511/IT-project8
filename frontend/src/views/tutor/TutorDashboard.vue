@@ -1,44 +1,29 @@
-<!--
-Tutor dashboard: View relevant assignments and jump into declaration editing.
--->
-
 <template>
   <div class="dashboard">
     <h2>Tutor Workspace</h2>
 
-    <div class="panel">
+    <el-card shadow="never" class="panel">
       <div class="panel-header">
-        <h3>Assignments to tackle</h3>
-        <button type="button" @click="router.push('/assignments')">All assignments</button>
+        <h3>To-do list</h3>
+        <el-button type="primary" link @click="router.push('/assignments')">View all assignments</el-button>
       </div>
-
-      <p v-if="!assignedAssignments.length"</p>
-
-      <table v-else class="table">
-        <thead>
-          <tr>
-            <th>Assignment</th>
-            <th>Course</th>
-            <th>Template status</th>
-            <th>Due date</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in assignedAssignments" :key="row.id">
-            <td>{{ row.name }}</td>
-            <td>{{ row.courseName }}</td>
-            <td>{{ statusLabel(row.aiDeclarationStatus) }}</td>
-            <td>{{ formatDate(row.dueDate) }}</td>
-            <td>
-              <button type="button" @click="router.push({ name: 'TemplateEditor', params: { assignmentId: row.id } })">
-                Edit template
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <el-table :data="assignedAssignments" border empty-text="No assignments yet">
+        <el-table-column prop="name" label="Assignment" min-width="180" />
+        <el-table-column prop="courseName" label="Course" min-width="180" />
+        <el-table-column label="Template status" width="140">
+          <template #default="{ row }">
+            <el-tag :type="tagType(row.aiDeclarationStatus)">{{ statusLabel(row.aiDeclarationStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Action" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="router.push({ name: 'TemplateEditor', params: { assignmentId: row.id } })">
+              Edit template
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
@@ -60,11 +45,7 @@ const assignedAssignments = computed(() => {
       ...assignment,
       courseName: dataStore.courses.find((course) => course.id === assignment.courseId)?.name || '—',
     }))
-    .sort((a, b) => {
-      const timeA = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-      const timeB = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-      return timeA - timeB;
-    });
+    .sort((a, b) => a.name.localeCompare(b.name));
 });
 
 function statusLabel(status: string) {
@@ -78,27 +59,16 @@ function statusLabel(status: string) {
   }
 }
 
-function formatDate(value?: string) {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+function tagType(status: string) {
+  if (status === 'published') return 'success';
+  if (status === 'draft') return 'warning';
+  return 'info';
 }
 </script>
 
 <style scoped>
-.dashboard { display: flex; flex-direction: column; gap: 20px; }
-.subtitle { color: #555; font-size: 14px; }
-.panel { border: 1px solid #ccc; padding: 16px; background: #fff; }
+.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.subtitle { color: #606266; }
+.panel { height: 100%; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.panel button { border: 1px solid #555; background: #fff; padding: 4px 8px; cursor: pointer; }
-.empty { color: #777; }
-.table { width: 100%; border-collapse: collapse; }
-.table th,
-.table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
-.table tbody tr:nth-child(even) { background: #f9f9f9; }
 </style>

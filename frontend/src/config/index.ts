@@ -1,7 +1,3 @@
-/**
- * 将.env 文件与 window.__APP_CONFIG__ 进行合并，并导出 appConfig
- */
-
 export type AppEnv = 'development' | 'staging' | 'production';
 
 export interface AppConfig {
@@ -15,12 +11,8 @@ export interface AppConfig {
   };
   assignmentTypes: string[];
 }
-
-// 'true'/'false' -> boolean
 const toBool = (v: unknown, fallback = false) =>
   String(v ?? '').toLowerCase() === 'true' ? true : fallback;
-
-// Build-time values from .env
 const env = import.meta.env;
 const assignmentTypesEnv = (env.VITE_ASSIGNMENT_TYPES || '')
   .split(',')
@@ -32,7 +24,7 @@ const defaultAssignmentTypes = ['Project', 'Essay', 'Quiz', 'Reflection', 'Lab']
 const envConfig: AppConfig = {
   appName: env.VITE_APP_NAME || 'AI Use Declaration',
   env: (env.VITE_APP_ENV as AppEnv) || (env.DEV ? 'development' : 'production'),
-  apiBase: env.VITE_API_BASE || 'http://localhost:8000',
+  apiBase: env.VITE_API_BASE || 'http://localhost:3000/api',
   routerBase: env.VITE_ROUTER_BASE || '/',
   wsUrl: env.VITE_WS_URL || undefined,
   features: {
@@ -40,8 +32,6 @@ const envConfig: AppConfig = {
   },
   assignmentTypes: assignmentTypesEnv.length ? assignmentTypesEnv : defaultAssignmentTypes,
 };
-
-// Runtime overrides from public/config.js
 const runtime = (window as any).__APP_CONFIG__ || {};
 
 export const appConfig: AppConfig = {
@@ -57,6 +47,4 @@ export const appConfig: AppConfig = {
 export function useAppConfig() {
   return appConfig;
 }
-
-// Support both `import { appConfig }` and `import appConfig`
 export default appConfig;

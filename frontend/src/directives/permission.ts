@@ -1,7 +1,3 @@
-/**
- * 判断用户是否有权限进入系统。
- */
-
 import type { App, DirectiveBinding } from 'vue';
 import { useUserStore } from '@/store/user';
 

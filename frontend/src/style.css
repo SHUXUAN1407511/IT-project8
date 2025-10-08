@@ -1,63 +1,79 @@
 :root {
-  font-family: Arial, Helvetica, sans-serif;
-  line-height: 1.4;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
   font-weight: 400;
-  color: #333;
-  background-color: #f0f0f0;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
 }
 
 body {
   margin: 0;
-  background: #f0f0f0;
-}
-
-a {
-  color: inherit;
-}
-
-button,
-input,
-select,
-textarea {
-  font-family: inherit;
-}
-
-#app {
+  display: flex;
+  place-items: center;
+  min-width: 320px;
   min-height: 100vh;
 }
 
-.el-button--primary {
-  background-color: #fff;
-  border-color: #222;
-  color: #222;
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus,
-.el-button--primary:active {
-  background-color: #f5f5f5;
-  border-color: #111;
-  color: #111;
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
 }
 
-.el-button--primary.is-link,
-.el-button--primary.is-text,
-.el-button--primary.is-plain {
-  color: #222;
-  border-color: transparent;
-  background-color: transparent;
+.card {
+  padding: 2em;
 }
 
-.el-button--primary.is-link:hover,
-.el-button--primary.is-text:hover,
-.el-button--primary.is-plain:hover,
-.el-button--primary.is-link:focus,
-.el-button--primary.is-text:focus,
-.el-button--primary.is-plain:focus,
-.el-button--primary.is-link:active,
-.el-button--primary.is-text:active,
-.el-button--primary.is-plain:active {
-  color: #111;
-  background-color: transparent;
-  border-color: transparent;
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
 }

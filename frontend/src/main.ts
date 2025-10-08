@@ -16,5 +16,5 @@ const app = createApp(App);
 app.use(pinia);
 app.use(router);
 app.use(ElementPlus);
-app.use(permission); // Register the v-permission directive
+app.use(permission); 
 app.mount('#app');

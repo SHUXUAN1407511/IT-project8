@@ -5,49 +5,76 @@
         <h2>AI Use Declaration Template</h2>
         <p class="subtitle" v-if="assignment">{{ assignment.name }} · {{ courseLabel }}</p>
       </div>
-      <div class="actions">
-        <el-button @click="exportTemplate('pdf')" :disabled="!editableRows.length">Export PDF</el-button>
-        <el-button @click="exportTemplate('xlsx')" :disabled="!editableRows.length">Export Excel</el-button>
+      <el-space :size="8" wrap>
         <el-button
+          type="primary"
+          plain
+          :disabled="!editableRows.length"
+          @click="exportTemplate('pdf')"
+        >
+          Export PDF
+        </el-button>
+        <el-button
+          type="primary"
+          plain
+          :disabled="!editableRows.length"
+          @click="exportTemplate('xlsx')"
+        >
+          Export Excel
+        </el-button>
+        <el-button
+          type="primary"
           :disabled="!canEdit || !editableRows.length"
           @click="saveTemplate(false)"
         >
           Save draft
         </el-button>
         <el-button
+          type="success"
           :disabled="!canEdit || !editableRows.length"
           @click="saveTemplate(true)"
         >
           Publish template
         </el-button>
+      </el-space>
+    </div>
+
+    <el-card class="filters" shadow="never">
+      <div class="filter-row">
+        <el-select
+          v-model="selectedAssignmentId"
+          placeholder="Choose assignment"
+          filterable
+          class="filter-item"
+        >
+          <el-option
+            v-for="item in assignmentOptions"
+            :key="item.id"
+            :label="`${item.name} · ${item.course}`"
+            :value="item.id"
+          />
+        </el-select>
+        <el-select
+          v-model="selectedScaleId"
+          placeholder="Select AI Use Scale"
+          class="filter-item"
+          :disabled="!scaleOptions.length"
+        >
+          <el-option
+            v-for="scale in scaleOptions"
+            :key="scale.id"
+            :label="scale.name"
+            :value="scale.id"
+          />
+        </el-select>
       </div>
-    </div>
+    </el-card>
 
-    <div class="selector">
-      <el-select
-        v-model="selectedAssignmentId"
-        placeholder="Choose assignment"
-        filterable
-        class="assignment-select"
-      >
-        <el-option
-          v-for="item in assignmentOptions"
-          :key="item.id"
-          :label="`${item.name} · ${item.course}`"
-          :value="item.id"
-        />
-      </el-select>
-    </div>
-
-    <el-card v-if="assignment" shadow="never">
+    <el-card v-if="assignment" shadow="never" class="panel">
       <div class="table-toolbar">
-        <div>
+        <el-space :size="4">
           <el-button type="primary" text :disabled="!canEdit" @click="addRow">Add row</el-button>
-        </div>
-        <div class="legend">
-          <span class="label">Note:</span>
-          <span>Selecting a Level copies the default instructions and acknowledgement. Edit anything you need.</span>
-        </div>
+        </el-space>
       </div>
       <el-table
         :data="editableRows"
@@ -61,7 +88,17 @@
             <span>{{ $index + 1 }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="Level" width="160">
+        <el-table-column label="General Learning or Assessment Tasks" min-width="240">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.task"
+              type="textarea"
+              :rows="3"
+              :disabled="!canEdit"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="AI Use Scale Level" width="220">
           <template #default="{ row }">
             <el-select
               v-model="row.levelId"
@@ -78,7 +115,7 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="Instructions" min-width="260">
+        <el-table-column label="Instructions to Students" min-width="260">
           <template #default="{ row }">
             <el-input
               v-model="row.instructions"
@@ -88,7 +125,27 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="Acknowledgement" min-width="260">
+        <el-table-column label="Examples" min-width="260">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.examples"
+              type="textarea"
+              :rows="3"
+              :disabled="!canEdit"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="AI Generated Content in Submission" min-width="240">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.aiGeneratedContent"
+              type="textarea"
+              :rows="3"
+              :disabled="!canEdit"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="AI Use Acknowledgement" min-width="260">
           <template #default="{ row }">
             <el-input
               v-model="row.acknowledgement"
@@ -98,23 +155,37 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="Extra notes" min-width="220">
-          <template #default="{ row }">
-            <el-input
-              v-model="row.additionalNotes"
-              type="textarea"
-              :rows="2"
-              :disabled="!canEdit"
-            />
-            <el-input
-              v-model="row.examples"
-              type="textarea"
-              :rows="2"
-              placeholder="Examples or attachment notes (optional)"
-              class="mt-6"
-              :disabled="!canEdit"
-            />
-          </template>
+        <el-table-column label="Student Declaration (Please complete this section)">
+          <el-table-column label="AI Tools Used (version and link if available)" min-width="220">
+            <template #default="{ row }">
+              <el-input
+                v-model="row.toolsUsed"
+                type="textarea"
+                :rows="3"
+                :disabled="!canEdit"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="Purpose and Usage" min-width="220">
+            <template #default="{ row }">
+              <el-input
+                v-model="row.purposeAndUsage"
+                type="textarea"
+                :rows="3"
+                :disabled="!canEdit"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="Key Prompts Used (if any)" min-width="220">
+            <template #default="{ row }">
+              <el-input
+                v-model="row.keyPrompts"
+                type="textarea"
+                :rows="3"
+                :disabled="!canEdit"
+              />
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="Actions" width="150" fixed="right">
           <template #default="{ $index }">
@@ -283,13 +354,17 @@ watch(scaleOptions, (options) => {
   }
 });
 
+watch(selectedScaleId, () => {
+  syncRowsWithScale();
+});
+
 function hydrateTemplate() {
   if (!assignment.value) {
     editableRows.value = [];
     return;
   }
   if (templateRecord.value) {
-    editableRows.value = templateRecord.value.rows.map((row) => ({ ...row }));
+    editableRows.value = templateRecord.value.rows.map((row) => withRowDefaults(row));
     const matchedScale = templateRecord.value.rows
       .map((row) => findScaleContainingLevel(row.levelId))
       .find((scale): scale is ScaleRecord => !!scale);
@@ -300,13 +375,15 @@ function hydrateTemplate() {
     selectedScaleId.value = scaleOptions.value[0]?.id || '';
     editableRows.value = [];
   }
+  syncRowsWithScale();
 }
 
 onMounted(hydrateTemplate);
 
 watch(templateRecord, (record) => {
   if (record) {
-    editableRows.value = record.rows.map((row) => ({ ...row }));
+    editableRows.value = record.rows.map((row) => withRowDefaults(row));
+    syncRowsWithScale();
   }
 });
 
@@ -329,15 +406,15 @@ function addRow() {
     ElMessage.warning('The selected scale has no available levels yet.');
     return;
   }
-  editableRows.value.push({
-    id: generateRowId(),
-    levelId: defaultLevel.id,
-    levelLabel: defaultLevel.label,
-    instructions: defaultLevel.instructions,
-    acknowledgement: defaultLevel.acknowledgement,
-    additionalNotes: '',
-    examples: '',
-  });
+  editableRows.value.push(
+    withRowDefaults({
+      id: generateRowId(),
+      levelId: defaultLevel.id,
+      levelLabel: defaultLevel.label,
+      instructions: defaultLevel.instructions ?? '',
+      acknowledgement: defaultLevel.acknowledgement ?? '',
+    }),
+  );
 }
 
 function removeRow(index: number) {
@@ -352,11 +429,52 @@ function moveRow(index: number, step: number) {
 }
 
 function onLevelChange(row: TemplateRow, levelId: string) {
-  const level = levelOptions.value.find((item) => item.id === levelId);
+  const level = findLevel(levelId);
   if (!level) return;
   row.levelLabel = level.label;
-  row.instructions = level.instructions;
-  row.acknowledgement = level.acknowledgement;
+  row.instructions = level.instructions ?? '';
+  row.acknowledgement = level.acknowledgement ?? '';
+}
+
+function syncRowsWithScale() {
+  if (!levelOptions.value.length || !editableRows.value.length) return;
+  editableRows.value.forEach((row) => {
+    const match = findLevel(row.levelId);
+    if (match) {
+      row.levelLabel = match.label;
+      return;
+    }
+    const fallback = levelOptions.value[0];
+    if (!fallback) return;
+    row.levelId = fallback.id;
+    row.levelLabel = fallback.label;
+    row.instructions = fallback.instructions ?? '';
+    row.acknowledgement = fallback.acknowledgement ?? '';
+  });
+}
+
+function findLevel(levelId?: string) {
+  if (!levelId) return levelOptions.value[0];
+  return levelOptions.value.find((item) => item.id === levelId) || levelOptions.value[0];
+}
+
+function withRowDefaults(seed: Partial<TemplateRow>): TemplateRow {
+  const level = findLevel(seed.levelId);
+  const levelLabel = level?.label ?? seed.levelLabel ?? '';
+  const legacy = seed as TemplateRow & { additionalNotes?: string };
+  return {
+    id: seed.id || generateRowId(),
+    task: seed.task ?? '',
+    levelId: level?.id || '',
+    levelLabel,
+    instructions: seed.instructions ?? level?.instructions ?? '',
+    acknowledgement: seed.acknowledgement ?? level?.acknowledgement ?? '',
+    examples: seed.examples ?? '',
+    aiGeneratedContent: seed.aiGeneratedContent ?? legacy.additionalNotes ?? '',
+    toolsUsed: seed.toolsUsed ?? '',
+    purposeAndUsage: seed.purposeAndUsage ?? '',
+    keyPrompts: seed.keyPrompts ?? '',
+  };
 }
 
 function saveTemplate(publish: boolean) {
@@ -381,7 +499,8 @@ function saveTemplate(publish: boolean) {
 }
 
 function exportTemplate(format: 'pdf' | 'xlsx') {
-  if (!editableRows.value.length) return;  const label = format === 'pdf' ? 'PDF' : 'Excel';
+  if (!editableRows.value.length) return;
+  const label = format === 'pdf' ? 'PDF' : 'Excel';
   ElMessage.info(`Generating ${label} export (demo only).`);
 }
 
@@ -394,11 +513,12 @@ function generateRowId() {
 .template-page { display: flex; flex-direction: column; gap: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .subtitle { margin: 4px 0 0; color: #606266; font-size: 14px; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters { padding: 12px 16px; }
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.filter-item { width: 280px; }
+.panel { display: flex; flex-direction: column; gap: 16px; }
 .label { color: #606266; font-size: 13px; margin-right: 4px; }
-.table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.table-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .legend { font-size: 13px; color: #606266; display: flex; gap: 8px; align-items: center; }
 .mt-6 { margin-top: 6px; }
-.selector { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.assignment-select { width: 360px; }
 </style>

@@ -4,9 +4,19 @@
       <div>
         <h2>Assignment Management</h2>
       </div>
-      <el-button class="outlined-button" :disabled="!canManageAssignments" @click="openCreateDialog">
-        New assignment
-      </el-button>
+      <el-space :size="8">
+        <el-button
+          v-if="canManageAssignmentTypes"
+          type="primary"
+          plain
+          @click="openTypeManager"
+        >
+          Manage assignment types
+        </el-button>
+        <el-button type="primary" :disabled="!canManageAssignments" @click="openCreateDialog">
+          New assignment
+        </el-button>
+      </el-space>
     </div>
 
     <el-card class="filters" shadow="never">
@@ -58,15 +68,86 @@
           <el-option label="Draft" value="draft" />
           <el-option label="Published" value="published" />
         </el-select>
-        <div class="flex-spacer" />
-        <el-button
-          class="outlined-button"
-          :disabled="!canManageAssignmentTypes"
-          @click="openTypeManager"
-        >
-          Manage assignment types
-        </el-button>
       </div>
+    </el-card>
+
+    <el-card shadow="never">
+      <el-table
+        :data="filteredAssignments"
+        stripe
+        border
+        height="480"
+        empty-text="Select a course to view assignments"
+      >
+        <el-table-column
+          prop="name"
+          label="Assignment"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="type"
+          label="Type"
+          width="140"
+        />
+        <el-table-column
+          label="Tutors"
+          width="220"
+        >
+          <template #default="{ row }">
+            <el-tag
+              v-for="tutor in resolveTutors(row.tutorIds)"
+              :key="tutor.id"
+              size="small"
+              type="info"
+              class="tag"
+            >
+              {{ tutor.name }}
+            </el-tag>
+            <span v-if="!row.tutorIds.length" class="muted">Unassigned</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Declaration template"
+          width="220"
+        >
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.aiDeclarationStatus)">
+              {{ statusLabel(row.aiDeclarationStatus) }}
+            </el-tag>
+            <div class="timestamp" v-if="row.templateUpdatedAt">
+              {{ formatDate(row.templateUpdatedAt) }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Actions"
+          width="240"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button link type="primary" @click="goToTemplate(row)">
+              Manage template
+            </el-button>
+            <el-button
+              link
+              type="primary"
+              v-permission="['admin', 'sc']"
+              @click="openEditDialog(row)"
+            >
+              Edit
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              v-permission="['admin', 'sc']"
+              @click="confirmDelete(row)"
+            >
+              Delete
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-card>
 
     <el-dialog
@@ -79,7 +160,7 @@
         ref="assignmentFormRef"
         :model="assignmentForm"
         :rules="assignmentRules"
-        label-width="120px"
+        label-width="150px"
       >
         <el-form-item label="Course" prop="courseId">
           <el-select
@@ -96,7 +177,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="Assignment name" prop="name">
-          <el-input v-model="assignmentForm.name" maxlength="120" show-word-limit />
+          <el-input v-model="assignmentForm.name" maxlength="150" show-word-limit />
         </el-form-item>
         <el-form-item label="Type" prop="type">
           <el-select
@@ -427,7 +508,7 @@ function goToTemplate(assignment: Assignment) {
 
 function formatDate(value?: string) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -442,16 +523,13 @@ function formatDate(value?: string) {
 .page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .subtitle { margin: 4px 0 0; color: #606266; font-size: 14px; }
 .filters { padding: 12px 16px; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .filter-item { width: 240px; }
-.flex-spacer { flex: 1 1 12px; min-width: 12px; }
-.manage-types-button { align-self: center; }
 .tag { margin: 2px; }
 .muted { color: #909399; font-size: 13px; }
 .timestamp { color: #909399; font-size: 12px; margin-top: 4px; }
 .type-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .type-tag { cursor: default; }
 .reset-button { margin-right: auto; }
-.text-button { color: #222; font-weight: 500; }
 .empty-message { margin: 12px 0; padding: 12px; border: 1px dashed #ccc; background: #fff; text-align: center; color: #666; }
 </style>

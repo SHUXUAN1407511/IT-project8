@@ -19,7 +19,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, layout: 'blank' }
   },
 
-  // Protected pages (main layout)
   {
     path: '/admin',
     name: 'AdminDashboard',
@@ -81,7 +80,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, roles: ['admin', 'sc', 'tutor'], layout: 'main' }
   },
 
-  // 403/404
   {
     path: '/403',
     name: 'Forbidden',
@@ -101,15 +99,12 @@ const router = createRouter({
   routes
 });
 
-// Route guard
 router.beforeEach((to) => {
   const userStore = useUserStore(pinia);
 
-  // Need auth?
   if (to.meta.requiresAuth && !userStore.isAuthenticated) {
     return { name: 'Login' };
   }
-  // Role check
   if (to.meta.roles && Array.isArray(to.meta.roles)) {
     if (!userStore.role || !to.meta.roles.includes(userStore.role)) {
       return { name: 'Forbidden' };

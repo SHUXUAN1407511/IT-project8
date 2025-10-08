@@ -2,13 +2,13 @@
   <div class="notification-page">
     <div class="page-header">
       <div>
-        <h2>Notification Center</h2>
+        <h2>Notification Centre</h2>
       </div>
       <div class="actions">
-        <el-button text class="text-button tab-button" :class="{ active: filter === 'all' }" @click="filter = 'all'">All</el-button>
-        <el-button text class="text-button tab-button" :class="{ active: filter === 'unread' }" @click="filter = 'unread'">Unread</el-button>
-        <el-button text class="text-button" :disabled="!hasUnread" @click="markAll">
-          Mark all read
+        <el-button @click="filter = 'all'" :type="filter === 'all' ? 'primary' : 'default'">All</el-button>
+        <el-button @click="filter = 'unread'" :type="filter === 'unread' ? 'primary' : 'default'">Unread</el-button>
+        <el-button type="primary" plain :disabled="!hasUnread" @click="markAll">
+          Mark all as read
         </el-button>
       </div>
     </div>
@@ -35,19 +35,19 @@
                 >Unread</el-tag>
               </div>
             </div>
-            <p class="content">{{ notice.content }}</p>
+            <p class="content">{{ notice.content || notice.body }}</p>
             <div class="footer">
               <el-button size="small" link type="primary" @click="navigate(notice)">
                 Open related page
               </el-button>
               <el-button size="small" link @click="markRead(notice.id)" v-if="!notice.isRead">
-                Mark read
+                Mark as read
               </el-button>
             </div>
           </div>
         </el-timeline-item>
       </el-timeline>
-      <p v-if="!filteredNotices.length"</p>
+      <div v-if="!filteredNotices.length" class="empty-message">No notifications</div>
     </el-card>
   </div>
 </template>
@@ -56,6 +56,7 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useDataStore } from '@/store/data';
+import type { NotificationItem } from '@/services/api';
 
 const dataStore = useDataStore();
 const router = useRouter();
@@ -79,7 +80,7 @@ function markAll() {
   dataStore.markAllNotificationsRead();
 }
 
-function navigate(notice: { relatedType: string; relatedId?: string }) {
+function navigate(notice: NotificationItem) {
   if (notice.relatedType === 'scale') {
     router.push({ path: '/scales' });
   } else if (notice.relatedType === 'assignment' && notice.relatedId) {
@@ -89,7 +90,7 @@ function navigate(notice: { relatedType: string; relatedId?: string }) {
   }
 }
 
-function tagType(type: string) {
+function tagType(type: string | undefined) {
   switch (type) {
     case 'scale':
       return 'warning';
@@ -102,7 +103,7 @@ function tagType(type: string) {
   }
 }
 
-function typeLabel(type: string) {
+function typeLabel(type: string | undefined) {
   switch (type) {
     case 'scale':
       return 'Scale update';
@@ -116,7 +117,7 @@ function typeLabel(type: string) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -129,15 +130,12 @@ function formatDate(value: string) {
 <style scoped>
 .notification-page { display: flex; flex-direction: column; gap: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.subtitle { color: #606266; }
 .actions { display: flex; gap: 8px; }
-.tab-button { color: #222; font-weight: 500; }
-.tab-button.active { text-decoration: underline; }
-.text-button { color: #222; }
-.text-button:disabled { color: #bbb; }
 .notice { display: flex; flex-direction: column; gap: 6px; }
 .notice-header { display: flex; justify-content: space-between; align-items: center; }
 .tags { display: flex; gap: 8px; align-items: center; }
 .content { color: #303133; margin: 0; }
 .footer { display: flex; gap: 12px; }
-.empty-message { margin: 12px 0; padding: 12px; border: 1px dashed #ccc; background: #fff; text-align: center; color: #666; }
+.empty-message { padding: 24px 0; text-align: center; color: #909399; }
 </style>

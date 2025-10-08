@@ -1,87 +1,67 @@
 <template>
   <div class="login-page">
-    <div class="login-box">
-      <h1>AI Use Declaration</h1>
+    <el-card class="login-card" shadow="hover">
+      <h2 class="title">AI Use Declaration Platform</h2>
+      <p class="subtitle">Sign in with your authorised account to manage courses and AI declaration templates.</p>
 
-      <form class="form" @submit.prevent="submit">
-        <label class="field">
-          <span>Username</span>
-          <input v-model="form.username" type="text" autocomplete="username" />
-        </label>
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @keyup.enter="submit">
+        <el-form-item label="Username" prop="username">
+          <el-input v-model="form.username" placeholder="e.g. sc.user" />
+        </el-form-item>
+        <el-form-item label="Password" prop="password">
+          <el-input v-model="form.password" type="password" show-password placeholder="Enter password" />
+        </el-form-item>
+        <el-button type="primary" class="full" :loading="loading" @click="submit">Sign In</el-button>
+      </el-form>
 
-        <label class="field">
-          <span>Password</span>
-          <input v-model="form.password" type="password" autocomplete="current-password" />
-        </label>
-
-        <label class="field">
-          <span>Role</span>
-          <select v-model="form.role">
-            <option value="">Select user type</option>
-            <option value="admin">Admin</option>
-            <option value="sc">Subject Coordinator</option>
-            <option value="tutor">Tutor</option>
-          </select>
-        </label>
-
-        <button class="submit" type="submit" :disabled="loading">
-          {{ loading ? 'Signing in…' : 'Log in' }}
-        </button>
-      </form>
-
-      <p class="switch">
-        Need an account?
-        <router-link :to="{ name: 'Register' }">Register</router-link>
-      </p>
-
-      <div class="quick">
-        <span>Quick demo roles:</span>
-        <button type="button" @click="quickLogin('admin')">Admin</button>
-        <button type="button" @click="quickLogin('sc')">SC</button>
-        <button type="button" @click="quickLogin('tutor')">Tutor</button>
+      <div class="links">
+        <el-link type="primary" @click="openForgotDialog">Forgot password?</el-link>
+        <el-divider direction="vertical" />
+        <router-link class="register-link" :to="{ name: 'Register' }">Need an account? Register</router-link>
       </div>
-    </div>
+
+      <div class="quick-login">
+        <span class="hint">Quick role switch:</span>
+        <el-button size="small" @click="quickLogin('admin')">Admin</el-button>
+        <el-button size="small" @click="quickLogin('sc')">SC</el-button>
+        <el-button size="small" @click="quickLogin('tutor')">Tutor</el-button>
+      </div>
+    </el-card>
+
+    <el-dialog v-model="forgotDialog.visible" title="Reset Password" width="420px">
+      <p class="dialog-hint">Enter Email address and send an email to reset.</p>
+      <template #footer>
+        <el-button type="primary" @click="forgotDialog.visible = false">Reset</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { useUserStore, type UserRole } from '@/store/user';
 
 const router = useRouter();
 const userStore = useUserStore();
 
+const formRef = ref<FormInstance>();
 const form = reactive({
   username: '',
   password: '',
-  role: '' as '' | UserRole,
 });
 
 const loading = ref(false);
 
-async function submit() {
-  if (!form.username || !form.password) {
-    ElMessage.error('Please enter username and password.');
-    return;
-  }
-  const fallbackRole = (form.role || 'admin') as UserRole;
-  loading.value = true;
-  try {
-    await userStore.login({
-      username: form.username,
-      password: form.password,
-      role: fallbackRole,
-    });
-    routeByRole(userStore.role as UserRole);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Login failed.';
-    ElMessage.error(message);
-  } finally {
-    loading.value = false;
-  }
-}
+const rules: FormRules = {
+  username: [{ required: true, message: 'Please enter your username.', trigger: 'blur' }],
+  password: [{ required: true, message: 'Please enter your password.', trigger: 'blur' }],
+};
+
+const forgotDialog = reactive({
+  visible: false,
+});
 
 function routeByRole(role: UserRole) {
   if (role === 'admin') router.push('/admin');
@@ -89,27 +69,47 @@ function routeByRole(role: UserRole) {
   if (role === 'tutor') router.push('/tutor');
 }
 
+function submit() {
+  if (loading.value) return;
+  formRef.value?.validate(async (valid) => {
+    if (!valid) return;
+    loading.value = true;
+    try {
+      await userStore.login({
+        username: form.username,
+        password: form.password,
+      });
+      routeByRole(userStore.role as UserRole);
+      ElMessage.success('Signed in successfully.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sign-in failed, please try again.';
+      ElMessage.error(message);
+    } finally {
+      loading.value = false;
+    }
+  });
+}
+
 function quickLogin(role: UserRole) {
   userStore.loginAs(role);
   routeByRole(role);
+  ElMessage.success(`Switched to ${role.toUpperCase()} demo account.`);
+}
+
+function openForgotDialog() {
+  forgotDialog.visible = true;
 }
 </script>
 
 <style scoped>
-.login-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; background: #f0f0f0; padding: 16px; }
-.login-box { width: 320px; background: #fff; border: 1px solid #dcdcdc; padding: 20px; box-shadow: none; }
-.login-box h1 { font-size: 22px; margin-bottom: 4px; }
-.hint { font-size: 13px; color: #666; margin-bottom: 16px; }
-.form { display: flex; flex-direction: column; gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-.field input,
-.field select { border: 1px solid #bbb; padding: 6px; font-size: 14px; }
-.submit { margin-top: 8px; padding: 8px; border: 1px solid #444; background: #fff; cursor: pointer; font-size: 14px; }
-.submit:hover { background: #eee; }
-.submit[disabled] { cursor: progress; opacity: 0.75; }
-.switch { margin-top: 12px; font-size: 13px; text-align: center; }
-.switch a { color: #0066cc; }
-.quick { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; align-items: center; }
-.quick button { border: 1px solid #999; background: #fff; padding: 4px 8px; cursor: pointer; }
-.quick button:hover { background: #f5f5f5; }
+.login-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; background: linear-gradient(135deg, #f6f9fc 0%, #edf1f5 100%); padding: 24px; }
+.login-card { width: 380px; }
+.title { text-align:center; margin-bottom:4px; }
+.subtitle { text-align:center; color:#606266; margin-bottom:20px; font-size:13px; }
+.full { width:100%; }
+.links { display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:8px; }
+.register-link { color:#409eff; font-size:13px; }
+.quick-login { display:flex; align-items:center; gap:8px; justify-content:center; font-size:13px; }
+.hint { color:#606266; }
+.dialog-hint { color:#606266; margin:0; }
 </style>
