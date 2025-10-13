@@ -1,21 +1,29 @@
 import { defineStore } from 'pinia';
 import { appConfig } from '@/config';
-import type {
-  Assignment,
-  AssignmentType,
-  Course,
-  DeclarationStatus,
-  ManagedUser,
-  NotificationItem,
-  ScaleLevel,
-  ScaleRecord,
-  TemplateRecord,
-  TemplateRow,
-  UserRole,
+import API, {
+  type AccountStatus,
+  type Assignment,
+  type AssignmentFilters,
+  type AssignmentType,
+  type Course,
+  type CourseFilters,
+  type CreateAssignmentRequest,
+  type CreateCourseRequest,
+  type CreateManagedUserRequest,
+  type DeclarationStatus,
+  type ManagedUser,
+  type NotificationItem,
+  type SaveScaleVersionRequest,
+  type ScaleLevel,
+  type ScaleRecord,
+  type SaveTemplateRequest,
+  type TemplateRecord,
+  type TemplateRow,
+  type UpdateAssignmentRequest,
+  type UpdateCourseRequest,
+  type UpdateManagedUserRequest,
+  type UserRole,
 } from '@/services/api';
-const deepCopy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-
-const generateId = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 
 const ASSIGNMENT_TYPES_STORAGE_KEY = 'assignmentTypes';
 
@@ -50,12 +58,14 @@ const loadAssignmentTypes = (): AssignmentType[] => {
   }
 };
 
+type TemplateCache = Record<string, TemplateRecord | null>;
+
 export const useDataStore = defineStore('data', {
   state: () => ({
     courses: [] as Course[],
     assignments: [] as Assignment[],
     assignmentTypes: loadAssignmentTypes(),
-    templates: [] as TemplateRecord[],
+    templateCache: {} as TemplateCache,
     scales: [] as ScaleRecord[],
     notifications: [] as NotificationItem[],
     users: [] as ManagedUser[],
@@ -73,198 +83,9 @@ export const useDataStore = defineStore('data', {
     coordinators(state) {
       return state.users.filter((user) => user.role === 'sc' && user.status === 'active');
     },
+    templateByAssignment: (state) => (assignmentId: string) => state.templateCache[assignmentId] || null,
   },
   actions: {
-    addCourse(payload: Omit<Course, 'id' | 'createdAt' | 'updatedAt'>) {
-      const now = new Date().toISOString();
-      const course: Course = {
-        ...payload,
-        id: generateId('course'),
-        createdAt: now,
-        updatedAt: now,
-      };
-      this.courses.push(course);
-      return course;
-    },
-    updateCourse(id: string, updates: Partial<Omit<Course, 'id' | 'createdAt'>>) {
-      const course = this.courses.find((item) => item.id === id);
-      if (!course) return;
-      Object.assign(course, updates);
-      course.updatedAt = new Date().toISOString();
-    },
-    deleteCourse(id: string) {
-      this.courses = this.courses.filter((course) => course.id !== id);
-      const removedAssignments = this.assignments.filter((assignment) => assignment.courseId === id);
-      const assignmentIds = new Set(removedAssignments.map((assignment) => assignment.id));
-      this.assignments = this.assignments.filter((assignment) => assignment.courseId !== id);
-      this.templates = this.templates.filter((template) => !assignmentIds.has(template.assignmentId));
-    },
-
-    addAssignment(payload: Omit<Assignment, 'id' | 'hasTemplate' | 'templateUpdatedAt' | 'aiDeclarationStatus'>) {
-      const assignment: Assignment = {
-        ...payload,
-        id: generateId('assignment'),
-        hasTemplate: false,
-        aiDeclarationStatus: 'missing',
-      };
-      this.assignments.push(assignment);
-      return assignment;
-    },
-    updateAssignment(id: string, updates: Partial<Omit<Assignment, 'id'>>) {
-      const assignment = this.assignments.find((item) => item.id === id);
-      if (!assignment) return;
-      Object.assign(assignment, updates);
-    },
-    deleteAssignment(id: string) {
-      this.assignments = this.assignments.filter((assignment) => assignment.id !== id);
-      this.templates = this.templates.filter((template) => template.assignmentId !== id);
-    },
-
-    saveTemplate(payload: { assignmentId: string; rows: TemplateRow[]; updatedBy: string; publish?: boolean }) {
-      const now = new Date().toISOString();
-      const existing = this.templates.find((template) => template.assignmentId === payload.assignmentId);
-      if (existing) {
-        existing.rows = deepCopy(payload.rows);
-        existing.updatedAt = now;
-        existing.updatedBy = payload.updatedBy;
-        if (typeof payload.publish === 'boolean') {
-          existing.isPublished = payload.publish;
-          existing.lastPublishedAt = payload.publish ? now : existing.lastPublishedAt;
-        }
-      } else {
-        this.templates.push({
-          id: generateId('template'),
-          assignmentId: payload.assignmentId,
-          rows: deepCopy(payload.rows),
-          updatedAt: now,
-          updatedBy: payload.updatedBy,
-          isPublished: payload.publish ?? false,
-          lastPublishedAt: payload.publish ? now : undefined,
-        });
-      }
-      const assignment = this.assignments.find((item) => item.id === payload.assignmentId);
-      if (assignment) {
-        assignment.hasTemplate = true;
-        assignment.templateUpdatedAt = now;
-        assignment.aiDeclarationStatus = payload.publish ? 'published' : 'draft';
-      }
-    },
-    toggleTemplatePublish(assignmentId: string, publish: boolean, updatedBy: string) {
-      const template = this.templates.find((item) => item.assignmentId === assignmentId);
-      if (!template) return;
-      const now = new Date().toISOString();
-      template.isPublished = publish;
-      template.updatedAt = now;
-      template.updatedBy = updatedBy;
-      template.lastPublishedAt = publish ? now : template.lastPublishedAt;
-      const assignment = this.assignments.find((item) => item.id === assignmentId);
-      if (assignment) {
-        assignment.aiDeclarationStatus = publish ? 'published' : 'draft';
-      }
-    },
-
-    saveScaleVersion(scaleId: string, levels: ScaleLevel[], updatedBy: string, notes?: string) {
-      const target = this.scales.find((scale) => scale.id === scaleId);
-      if (!target) return;
-      target.history.unshift(deepCopy(target.currentVersion));
-      target.currentVersion = {
-        id: generateId('scale_version'),
-        version: target.currentVersion.version + 1,
-        updatedAt: new Date().toISOString(),
-        updatedBy,
-        notes,
-        levels: deepCopy(levels),
-      };
-    },
-    createCustomScale(payload: { name: string; ownerId: string; isPublic: boolean; levels: ScaleLevel[]; notes?: string; updatedBy: string }) {
-      const scale: ScaleRecord = {
-        id: generateId('scale'),
-        name: payload.name,
-        ownerType: 'sc',
-        ownerId: payload.ownerId,
-        isPublic: payload.isPublic,
-        currentVersion: {
-          id: generateId('scale_version'),
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          updatedBy: payload.updatedBy,
-          notes: payload.notes,
-          levels: deepCopy(payload.levels),
-        },
-        history: [],
-      };
-      this.scales.push(scale);
-      return scale;
-    },
-    rollbackScale(scaleId: string, versionId: string, updatedBy: string, notes?: string) {
-      const target = this.scales.find((scale) => scale.id === scaleId);
-      if (!target) return;
-      const version = [target.currentVersion, ...target.history].find((item) => item.id === versionId);
-      if (!version) return;
-      target.history.unshift(deepCopy(target.currentVersion));
-      target.currentVersion = {
-        id: generateId('scale_version'),
-        version: target.currentVersion.version + 1,
-        updatedAt: new Date().toISOString(),
-        updatedBy,
-        notes: notes || `Rolled back to version ${version.version}`,
-        levels: deepCopy(version.levels),
-      };
-    },
-    toggleScalePublic(scaleId: string, isPublic: boolean) {
-      const target = this.scales.find((scale) => scale.id === scaleId);
-      if (target) {
-        target.isPublic = isPublic;
-      }
-    },
-
-    markNotificationRead(id: string) {
-      const notice = this.notifications.find((item) => item.id === id);
-      if (notice) {
-        notice.isRead = true;
-      }
-    },
-    markAllNotificationsRead() {
-      this.notifications.forEach((item) => {
-        item.isRead = true;
-      });
-    },
-    createNotification(notification: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) {
-      this.notifications.unshift({
-        id: generateId('notice'),
-        createdAt: new Date().toISOString(),
-        isRead: false,
-        ...notification,
-      });
-    },
-
-    createUser(payload: Omit<ManagedUser, 'id' | 'lastLoginAt' | 'status'> & { status?: 'active' | 'inactive' }) {
-      const user: ManagedUser = {
-        id: generateId('user'),
-        username: payload.username,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-        phone: payload.phone,
-        organization: payload.organization,
-        bio: payload.bio,
-        status: payload.status || 'active',
-        lastLoginAt: new Date().toISOString(),
-      };
-      this.users.push(user);
-      return user;
-    },
-    updateUser(id: string, updates: Partial<ManagedUser>) {
-      const user = this.users.find((item) => item.id === id);
-      if (!user) return;
-      Object.assign(user, updates);
-    },
-    toggleUserStatus(id: string, status: 'active' | 'inactive') {
-      const user = this.users.find((item) => item.id === id);
-      if (user) {
-        user.status = status;
-      }
-    },
     setAssignmentTypes(types: AssignmentType[]) {
       const sanitized = sanitizeAssignmentTypes(types, appConfig.assignmentTypes);
       this.assignmentTypes = sanitized;
@@ -282,6 +103,211 @@ export const useDataStore = defineStore('data', {
     resetAssignmentTypes() {
       this.setAssignmentTypes([...appConfig.assignmentTypes] as AssignmentType[]);
     },
+
+    async fetchCourses(filters?: CourseFilters) {
+      const courses = await API.courses.list(filters);
+      this.courses = courses;
+      return courses;
+    },
+    async addCourse(payload: CreateCourseRequest) {
+      const course = await API.courses.create(payload);
+      this.upsertCourse(course);
+      return course;
+    },
+    async updateCourse(id: string, payload: UpdateCourseRequest) {
+      const course = await API.courses.update(id, payload);
+      this.upsertCourse(course);
+      return course;
+    },
+    async deleteCourse(id: string) {
+      await API.courses.remove(id);
+      this.courses = this.courses.filter((course) => course.id !== id);
+      const remainingCourseIds = new Set(this.courses.map((course) => course.id));
+      this.assignments = this.assignments.filter((assignment) => {
+        const keep = remainingCourseIds.has(assignment.courseId);
+        if (!keep) {
+          delete this.templateCache[assignment.id];
+        }
+        return keep;
+      });
+    },
+
+    async fetchAssignments(filters?: AssignmentFilters) {
+      const assignments = await API.assignments.list(filters);
+      this.assignments = assignments;
+      this.pruneTemplateCache(new Set(assignments.map((assignment) => assignment.id)));
+      return assignments;
+    },
+    async fetchAssignment(id: string) {
+      const assignment = await API.assignments.get(id);
+      this.upsertAssignment(assignment);
+      return assignment;
+    },
+    async addAssignment(payload: CreateAssignmentRequest) {
+      const assignment = await API.assignments.create(payload);
+      this.upsertAssignment(assignment);
+      return assignment;
+    },
+    async updateAssignment(id: string, payload: UpdateAssignmentRequest) {
+      const assignment = await API.assignments.update(id, payload);
+      this.upsertAssignment(assignment);
+      return assignment;
+    },
+    async deleteAssignment(id: string) {
+      await API.assignments.remove(id);
+      this.assignments = this.assignments.filter((assignment) => assignment.id !== id);
+      delete this.templateCache[id];
+    },
+
+    async fetchTemplate(assignmentId: string) {
+      const template = await API.templates.getByAssignment(assignmentId);
+      this.templateCache[assignmentId] = template;
+      return template;
+    },
+    async saveTemplate(
+      assignmentId: string,
+      payload: Omit<SaveTemplateRequest, 'assignmentId'> & { updatedBy?: string }
+    ) {
+      const template = await API.templates.save(assignmentId, {
+        assignmentId,
+        rows: payload.rows,
+        publish: payload.publish,
+      });
+      this.templateCache[assignmentId] = {
+        ...template,
+        updatedBy: payload.updatedBy ?? template.updatedBy,
+      };
+      await this.fetchAssignment(assignmentId);
+      return this.templateCache[assignmentId];
+    },
+    async publishTemplate(assignmentId: string) {
+      await API.templates.publish(assignmentId);
+      return this.refreshTemplate(assignmentId);
+    },
+    async unpublishTemplate(assignmentId: string) {
+      await API.templates.unpublish(assignmentId);
+      return this.refreshTemplate(assignmentId);
+    },
+    async refreshTemplate(assignmentId: string) {
+      try {
+        const template = await API.templates.getByAssignment(assignmentId);
+        this.templateCache[assignmentId] = template;
+      } catch (error) {
+        this.templateCache[assignmentId] = null;
+      }
+      await this.fetchAssignment(assignmentId);
+      return this.templateCache[assignmentId];
+    },
+
+    async fetchScales() {
+      const scales = await API.scales.list();
+      this.scales = scales;
+      return scales;
+    },
+    async saveScaleVersion(payload: SaveScaleVersionRequest) {
+      const scale = await API.scales.saveVersion(payload);
+      this.upsertScale(scale);
+      return scale;
+    },
+    async createCustomScale(payload: {
+      name: string;
+      ownerId: string;
+      isPublic: boolean;
+      levels: ScaleLevel[];
+      notes?: string;
+      updatedBy: string;
+    }) {
+      const scale = await API.scales.createCustom(payload);
+      this.upsertScale(scale);
+      return scale;
+    },
+    async rollbackScale(scaleId: string, versionId: string, notes?: string) {
+      const scale = await API.scales.rollback(scaleId, versionId, notes);
+      this.upsertScale(scale);
+      return scale;
+    },
+    async toggleScalePublic(scaleId: string, isPublic: boolean) {
+      const scale = await API.scales.toggleVisibility(scaleId, isPublic);
+      this.upsertScale(scale);
+      return scale;
+    },
+
+    async fetchNotifications() {
+      const notifications = await API.notifications.list();
+      this.notifications = notifications;
+      return notifications;
+    },
+    async markNotificationRead(id: string) {
+      await API.notifications.markRead(id);
+      this.notifications = this.notifications.map((notice) =>
+        notice.id === id ? { ...notice, isRead: true } : notice
+      );
+    },
+    async markAllNotificationsRead() {
+      await API.notifications.markAllRead();
+      this.notifications = this.notifications.map((notice) => ({ ...notice, isRead: true }));
+    },
+
+    async fetchUsers() {
+      const users = await API.adminUsers.list();
+      this.users = users;
+      return users;
+    },
+    async createUser(payload: CreateManagedUserRequest) {
+      const user = await API.adminUsers.create(payload);
+      this.upsertUser(user);
+      return user;
+    },
+    async updateUser(id: string, updates: UpdateManagedUserRequest) {
+      const user = await API.adminUsers.update(id, updates);
+      this.upsertUser(user);
+      return user;
+    },
+    async toggleUserStatus(id: string, status: AccountStatus) {
+      const user = await API.adminUsers.toggleStatus(id, status);
+      this.upsertUser(user);
+      return user;
+    },
+
+    upsertCourse(course: Course) {
+      const index = this.courses.findIndex((item) => item.id === course.id);
+      if (index >= 0) {
+        this.courses.splice(index, 1, course);
+      } else {
+        this.courses.push(course);
+      }
+    },
+    upsertAssignment(assignment: Assignment) {
+      const index = this.assignments.findIndex((item) => item.id === assignment.id);
+      if (index >= 0) {
+        this.assignments.splice(index, 1, assignment);
+      } else {
+        this.assignments.push(assignment);
+      }
+    },
+    upsertScale(scale: ScaleRecord) {
+      const index = this.scales.findIndex((item) => item.id === scale.id);
+      if (index >= 0) {
+        this.scales.splice(index, 1, scale);
+      } else {
+        this.scales.push(scale);
+      }
+    },
+    upsertUser(user: ManagedUser) {
+      const index = this.users.findIndex((item) => item.id === user.id);
+      if (index >= 0) {
+        this.users.splice(index, 1, user);
+      } else {
+        this.users.push(user);
+      }
+    },
+    pruneTemplateCache(validAssignmentIds: Set<string>) {
+      Object.keys(this.templateCache).forEach((assignmentId) => {
+        if (!validAssignmentIds.has(assignmentId)) {
+          delete this.templateCache[assignmentId];
+        }
+      });
+    },
   },
 });
 
@@ -289,6 +315,7 @@ export type {
   Course,
   Assignment,
   AssignmentType,
+  AssignmentFilters,
   DeclarationStatus,
   TemplateRecord,
   TemplateRow,
@@ -296,4 +323,5 @@ export type {
   ScaleLevel,
   NotificationItem,
   ManagedUser,
+  UserRole,
 } from '@/services/api';

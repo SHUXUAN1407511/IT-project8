@@ -291,7 +291,7 @@ const courseLabel = computed(() => {
 const editableRows = ref<TemplateRow[]>([]);
 
 const templateRecord = computed(() =>
-  dataStore.templates.find((tpl) => tpl.assignmentId === selectedAssignmentId.value)
+  dataStore.templateByAssignment(selectedAssignmentId.value)
 );
 
 const scaleOptions = computed<ScaleRecord[]>(() => {
@@ -338,6 +338,7 @@ watch(selectedAssignmentId, (id) => {
     if (route.params.assignmentId !== id) {
       router.replace({ name: 'TemplateEditor', params: { assignmentId: id } });
     }
+    void dataStore.refreshTemplate(id);
   } else if (route.path !== '/templates') {
     router.replace({ path: '/templates' });
   }
@@ -361,11 +362,13 @@ watch(selectedScaleId, () => {
 function hydrateTemplate() {
   if (!assignment.value) {
     editableRows.value = [];
+    selectedScaleId.value = scaleOptions.value[0]?.id || '';
     return;
   }
-  if (templateRecord.value) {
-    editableRows.value = templateRecord.value.rows.map((row) => withRowDefaults(row));
-    const matchedScale = templateRecord.value.rows
+  const record = templateRecord.value;
+  if (record) {
+    editableRows.value = record.rows.map((row) => withRowDefaults(row));
+    const matchedScale = record.rows
       .map((row) => findScaleContainingLevel(row.levelId))
       .find((scale): scale is ScaleRecord => !!scale);
     if (matchedScale) {
@@ -378,13 +381,26 @@ function hydrateTemplate() {
   syncRowsWithScale();
 }
 
-onMounted(hydrateTemplate);
+onMounted(async () => {
+  await Promise.allSettled([
+    dataStore.fetchCourses(),
+    dataStore.fetchAssignments(),
+    dataStore.fetchUsers(),
+    dataStore.fetchScales(),
+  ]);
+  if (selectedAssignmentId.value) {
+    await dataStore.refreshTemplate(selectedAssignmentId.value);
+  }
+  hydrateTemplate();
+});
 
 watch(templateRecord, (record) => {
   if (record) {
     editableRows.value = record.rows.map((row) => withRowDefaults(row));
-    syncRowsWithScale();
+  } else if (!assignment.value) {
+    editableRows.value = [];
   }
+  syncRowsWithScale();
 });
 
 const canEdit = computed(() => {
@@ -477,7 +493,7 @@ function withRowDefaults(seed: Partial<TemplateRow>): TemplateRow {
   };
 }
 
-function saveTemplate(publish: boolean) {
+async function saveTemplate(publish: boolean) {
   if (!assignment.value || !userStore.userInfo) {
     ElMessage.error('Assignment or user info is missing.');
     return;
@@ -486,8 +502,7 @@ function saveTemplate(publish: boolean) {
     ElMessage.warning('Please add at least one declaration row.');
     return;
   }
-  dataStore.saveTemplate({
-    assignmentId: assignment.value.id,
+  await dataStore.saveTemplate(assignment.value.id, {
     rows: editableRows.value,
     updatedBy: userStore.userInfo.name,
     publish,

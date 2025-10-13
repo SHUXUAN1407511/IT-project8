@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import { useDataStore } from '@/store/data';
@@ -36,6 +36,10 @@ import { useDataStore } from '@/store/data';
 const router = useRouter();
 const userStore = useUserStore();
 const dataStore = useDataStore();
+
+onMounted(async () => {
+  await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchAssignments()]);
+});
 
 const assignedAssignments = computed(() => {
   const tutorId = userStore.userInfo?.id || '';

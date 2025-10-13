@@ -195,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { useDataStore, type Course } from '@/store/data';
@@ -211,6 +211,10 @@ const coordinatorFilter = ref('');
 const sortState = ref<{ prop: keyof Course | ''; order: 'ascending' | 'descending' | null }>({ prop: '', order: null });
 
 const isAdmin = computed(() => userStore.role === 'admin');
+
+onMounted(async () => {
+  await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchUsers()]);
+});
 
 const coordinatorOptions = computed(() => {
   const list = dataStore.coordinators;
@@ -343,7 +347,7 @@ function openEditCourse(course: Course) {
 }
 
 function submitCourse() {
-  courseFormRef.value?.validate((valid) => {
+  courseFormRef.value?.validate(async (valid) => {
     if (!valid) return;
     const payload = {
       name: courseForm.name,
@@ -353,10 +357,10 @@ function submitCourse() {
       description: courseForm.description,
     };
     if (courseForm.id) {
-      dataStore.updateCourse(courseForm.id, payload);
+      await dataStore.updateCourse(courseForm.id, payload);
       ElMessage.success('Course updated.');
     } else {
-      dataStore.addCourse(payload as any);
+      await dataStore.addCourse(payload as any);
       ElMessage.success('Course created.');
     }
     courseDialogVisible.value = false;
@@ -373,8 +377,8 @@ function confirmRemoveCourse(course: Course) {
       type: 'warning',
     }
   )
-    .then(() => {
-      dataStore.deleteCourse(course.id);
+    .then(async () => {
+      await dataStore.deleteCourse(course.id);
       ElMessage.success('Course deleted.');
     })
     .catch(() => undefined);

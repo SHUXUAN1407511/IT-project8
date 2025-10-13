@@ -96,13 +96,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import { useDataStore, type ManagedUser } from '@/store/data';
 import type { UserRole } from '@/store/user';
 
 const dataStore = useDataStore();
+
+onMounted(async () => {
+  await dataStore.fetchUsers();
+});
 
 const searchQuery = ref('');
 const roleFilter = ref('');
@@ -175,10 +179,10 @@ function resetForm() {
 }
 
 function submit() {
-  formRef.value?.validate((valid) => {
+  formRef.value?.validate(async (valid) => {
     if (!valid) return;
     if (dialogMode.value === 'create') {
-      dataStore.createUser({
+      await dataStore.createUser({
         name: form.name,
         username: form.username,
         email: form.email,
@@ -189,7 +193,7 @@ function submit() {
       });
       ElMessage.success('User created.');
     } else {
-      dataStore.updateUser(form.id, {
+      await dataStore.updateUser(form.id, {
         name: form.name,
         email: form.email,
         role: form.role as UserRole,
@@ -203,9 +207,9 @@ function submit() {
   });
 }
 
-function toggleStatus(user: ManagedUser) {
+async function toggleStatus(user: ManagedUser) {
   const next = user.status === 'active' ? 'inactive' : 'active';
-  dataStore.toggleUserStatus(user.id, next);
+  await dataStore.toggleUserStatus(user.id, next);
   ElMessage.success(next === 'active' ? 'Account enabled.' : 'Account disabled.');
 }
 

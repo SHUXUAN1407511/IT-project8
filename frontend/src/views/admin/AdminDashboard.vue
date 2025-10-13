@@ -51,12 +51,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useDataStore } from '@/store/data';
 
 const router = useRouter();
 const dataStore = useDataStore();
+
+onMounted(async () => {
+  await Promise.allSettled([
+    dataStore.fetchUsers(),
+    dataStore.fetchCourses(),
+    dataStore.fetchNotifications(),
+    dataStore.fetchScales(),
+  ]);
+});
 
 const defaultScale = computed(() => dataStore.defaultScale);
 

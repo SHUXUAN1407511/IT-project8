@@ -262,7 +262,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
@@ -273,6 +273,10 @@ import { appConfig } from '@/config';
 const router = useRouter();
 const userStore = useUserStore();
 const dataStore = useDataStore();
+
+onMounted(async () => {
+  await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchAssignments(), dataStore.fetchUsers()]);
+});
 
 const searchQuery = ref('');
 const selectedCourseId = ref('');
@@ -465,7 +469,7 @@ function resetForm() {
 }
 
 function submitAssignment() {
-  assignmentFormRef.value?.validate((valid) => {
+  assignmentFormRef.value?.validate(async (valid) => {
     if (!valid) return;
     const payload = {
       courseId: assignmentForm.courseId,
@@ -474,10 +478,10 @@ function submitAssignment() {
       tutorIds: assignmentForm.tutorIds,
     };
     if (assignmentForm.id) {
-      dataStore.updateAssignment(assignmentForm.id, payload);
+      await dataStore.updateAssignment(assignmentForm.id, payload);
       ElMessage.success('Assignment updated.');
     } else {
-      const created = dataStore.addAssignment(payload);
+      const created = await dataStore.addAssignment(payload);
       selectedCourseId.value = created.courseId;
       ElMessage.success('Assignment created.');
     }
@@ -495,8 +499,8 @@ function confirmDelete(assignment: Assignment) {
       type: 'warning',
     }
   )
-    .then(() => {
-      dataStore.deleteAssignment(assignment.id);
+    .then(async () => {
+      await dataStore.deleteAssignment(assignment.id);
       ElMessage.success('Assignment deleted.');
     })
     .catch(() => undefined);

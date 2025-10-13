@@ -20,12 +20,6 @@
         <router-link class="register-link" :to="{ name: 'Register' }">Need an account? Register</router-link>
       </div>
 
-      <div class="quick-login">
-        <span class="hint">Quick role switch:</span>
-        <el-button size="small" @click="quickLogin('admin')">Admin</el-button>
-        <el-button size="small" @click="quickLogin('sc')">SC</el-button>
-        <el-button size="small" @click="quickLogin('tutor')">Tutor</el-button>
-      </div>
     </el-card>
 
     <el-dialog v-model="forgotDialog.visible" title="Reset Password" width="420px">
@@ -90,12 +84,6 @@ function submit() {
   });
 }
 
-function quickLogin(role: UserRole) {
-  userStore.loginAs(role);
-  routeByRole(role);
-  ElMessage.success(`Switched to ${role.toUpperCase()} demo account.`);
-}
-
 function openForgotDialog() {
   forgotDialog.visible = true;
 }
@@ -109,7 +97,5 @@ function openForgotDialog() {
 .full { width:100%; }
 .links { display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:8px; }
 .register-link { color:#409eff; font-size:13px; }
-.quick-login { display:flex; align-items:center; gap:8px; justify-content:center; font-size:13px; }
-.hint { color:#606266; }
 .dialog-hint { color:#606266; margin:0; }
 </style>

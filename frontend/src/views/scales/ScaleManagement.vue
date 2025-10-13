@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { useDataStore, type ScaleLevel } from '@/store/data';
@@ -145,6 +145,9 @@ import { useDataStore, type ScaleLevel } from '@/store/data';
 const dataStore = useDataStore();
 const userStore = useUserStore();
 
+onMounted(async () => {
+  await dataStore.fetchScales();
+});
 const defaultScale = computed(() => dataStore.defaultScale);
 const defaultLevels = ref<ScaleLevel[]>(
   defaultScale.value
@@ -231,9 +234,9 @@ function saveLevel() {
   levelDialog.visible = false;
 }
 
-function saveDefaultScale() {
+async function saveDefaultScale() {
   if (!canEditDefault.value || !defaultScale.value) return;
-  dataStore.saveScaleVersion(
+  await dataStore.saveScaleVersion(
     defaultScale.value.id,
     defaultLevels.value,
     userStore.userInfo?.name || 'Admin',
@@ -242,9 +245,9 @@ function saveDefaultScale() {
   ElMessage.success('Default scale saved as a new version.');
 }
 
-function rollbackScale(scaleId: string, versionId: string) {
+async function rollbackScale(scaleId: string, versionId: string) {
   if (!canEditDefault.value) return;
-  dataStore.rollbackScale(scaleId, versionId, userStore.userInfo?.name || 'Admin');
+  await dataStore.rollbackScale(scaleId, versionId, userStore.userInfo?.name || 'Admin');
   const latest = dataStore.scales.find((scale) => scale.id === scaleId);
   if (latest && scaleId === defaultScale.value?.id) {
     defaultLevels.value = latest.currentVersion.levels.map((level) => ({

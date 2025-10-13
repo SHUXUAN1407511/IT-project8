@@ -9,6 +9,12 @@ interface RequestOptions extends RequestInit {
   skipAuthRedirect?: boolean;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 const safeMethods: HttpMethod[] = ['GET'];
 
 function isSafeMethod(method?: string) {
@@ -23,8 +29,23 @@ function getCsrfToken() {
 }
 
 async function send<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
-  const endpoint = url.startsWith('http') ? url : new URL(url, appConfig.apiBase).toString();
-  const headers = new Headers(options.headers || {});
+  const resolvedOptions: RequestOptions = { ...options };
+  const baseEndpoint = url.startsWith('http') ? url : new URL(url, appConfig.apiBase).toString();
+  const username = localStorage.getItem('username');
+  let endpoint = baseEndpoint;
+
+  if (username) {
+    const urlObject = new URL(baseEndpoint);
+    if (!urlObject.searchParams.has('username')) {
+      urlObject.searchParams.set('username', username);
+    }
+    endpoint = urlObject.toString();
+    if (isPlainObject(resolvedOptions.data) && resolvedOptions.data.username === undefined) {
+      resolvedOptions.data = { ...resolvedOptions.data, username };
+    }
+  }
+
+  const headers = new Headers(resolvedOptions.headers || {});
   const token = localStorage.getItem('token');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -32,10 +53,10 @@ async function send<T = unknown>(url: string, options: RequestOptions = {}): Pro
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }
-  if (options.data && !headers.has('Content-Type')) {
+  if (resolvedOptions.data && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (!isSafeMethod(options.method) && !headers.has('X-CSRFToken')) {
+  if (!isSafeMethod(resolvedOptions.method) && !headers.has('X-CSRFToken')) {
     const csrf = getCsrfToken();
     if (csrf) {
       headers.set('X-CSRFToken', csrf);
@@ -43,11 +64,11 @@ async function send<T = unknown>(url: string, options: RequestOptions = {}): Pro
   }
 
   const response = await fetch(endpoint, {
-    ...options,
-    method: options.method || 'GET',
+    ...resolvedOptions,
+    method: resolvedOptions.method || 'GET',
     headers,
-    body: options.data ? JSON.stringify(options.data) : options.body,
-    credentials: options.credentials ?? 'include',
+    body: resolvedOptions.data ? JSON.stringify(resolvedOptions.data) : resolvedOptions.body,
+    credentials: resolvedOptions.credentials ?? 'include',
   });
 
   if (response.ok) {
@@ -59,7 +80,7 @@ async function send<T = unknown>(url: string, options: RequestOptions = {}): Pro
   }
 
   const message = await extractMessage(response);
-  if (response.status === 401 && !options.skipAuthRedirect) {
+  if (response.status === 401 && !resolvedOptions.skipAuthRedirect) {
     ElMessage.error('Session expired. Please sign in again.');
     await router.push({ name: 'Login' });
   } else if (response.status === 403) {

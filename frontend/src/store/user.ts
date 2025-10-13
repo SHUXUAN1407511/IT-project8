@@ -26,19 +26,6 @@ export const useUserStore = defineStore('user', {
       });
       this.applyLoginState(payload, response);
     },
-    loginAs(role: UserRole) {
-      const id = `user_${Math.random().toString(36).slice(2, 10)}`;
-      this.userInfo = {
-        id,
-        username: `${role}_user`,
-        name: `${role.toUpperCase()} User`,
-        role,
-        status: 'active',
-      } as AccountProfile;
-      this.role = role;
-      this.isAuthenticated = true;
-      this.credentials = { username: `${role}_user`, password: 'placeholder' };
-    },
     async register(payload: { username: string; password: string; role: UserRole }) {
       await API.auth.register(payload);
     },
@@ -48,6 +35,7 @@ export const useUserStore = defineStore('user', {
       this.isAuthenticated = false;
       this.credentials = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('username');
     },
     updateProfile(updates: Partial<Omit<AccountProfile, 'id' | 'username' | 'role'>>) {
       if (!this.userInfo) return;
@@ -89,6 +77,7 @@ export const useUserStore = defineStore('user', {
       this.role = role;
       this.isAuthenticated = true;
       this.credentials = { username: payload.username, password: payload.password };
+      localStorage.setItem('username', profile.username);
     },
   },
 });

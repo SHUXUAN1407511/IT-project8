@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useDataStore } from '@/store/data';
 import type { NotificationItem } from '@/services/api';
@@ -62,6 +62,10 @@ const dataStore = useDataStore();
 const router = useRouter();
 
 const filter = ref<'all' | 'unread'>('all');
+
+onMounted(async () => {
+  await dataStore.fetchNotifications();
+});
 
 const filteredNotices = computed(() => {
   if (filter.value === 'unread') {
@@ -72,12 +76,12 @@ const filteredNotices = computed(() => {
 
 const hasUnread = computed(() => dataStore.notifications.some((notice) => !notice.isRead));
 
-function markRead(id: string) {
-  dataStore.markNotificationRead(id);
+async function markRead(id: string) {
+  await dataStore.markNotificationRead(id);
 }
 
-function markAll() {
-  dataStore.markAllNotificationsRead();
+async function markAll() {
+  await dataStore.markAllNotificationsRead();
 }
 
 function navigate(notice: NotificationItem) {
