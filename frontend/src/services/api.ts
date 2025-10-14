@@ -8,15 +8,22 @@
  * - 如需对权限做鉴权，请使用 `Authorization: Bearer <token>` 头部；目前前端只负责传递，不会手动拼 Query。
  * - 所有时间字段统一使用 ISO 8601 字符串（例如 `2025-03-01T12:34:56.000Z`），便于前端直接格式化展示。
  */
+
+
+/*关闭占用  netstat -ano | findstr :5174
+            taskkill /PID <PID> /F
+            taskkill /IM node.exe /F
+*/  
+
 import http from './http';
 // 注册
 export const registerUser = async (payload: { username: string; password: string; role: string }) => {
-  return http.post('register/', payload)
+  return http.post('auth/register/', payload)
 }
 
 // 登录
 export const loginUser = async (payload: { username: string; password: string }) => {
-  return http.post('login/', payload)
+  return http.post('auth/login/', payload)
 }
 
 
@@ -128,14 +135,14 @@ export const AuthAPI = {
    * 后端需校验用户名密码并返回 LoginResponse。若失败请返回 401，body 中提供 `message`。
    */
   login(payload: LoginRequest) {
-    return http.post<LoginResponse>('/auth/login', payload);
+    return http.post<LoginResponse>('auth/login/', payload);
   },
   /**
    * POST /auth/logout：用户退出登录时调用。
    * 期望后端清理 token 或 session。成功返回 200，无需响应体；失败请返回 4xx 并包含 `message`。
    */
   logout() {
-    return http.post<void>('/auth/logout');
+    return http.post<void>('auth/logout');
   },
   /**
    * GET /auth/me：用于刷新页面后校验登录态。
@@ -163,7 +170,7 @@ export const AuthAPI = {
    * 需创建账号并返回 RegisterResponse，至少包含新用户的基本信息。若用户名重复请返回 400。
    */
   register(payload: RegisterRequest) {
-    return http.post<RegisterResponse>('/auth/register', payload);
+    return http.post<RegisterResponse>('/auth/register/', payload);
   },
 };
 
@@ -212,14 +219,14 @@ export const CoursesAPI = {
    * 若需要分页，可以扩展响应格式（例如 `{ items: Course[], total: number }`），再同步调整前端解析逻辑。
    */
   list(filters?: CourseFilters) {
-    return http.get<Course[]>(`/courses${buildQuery(filters ? { ...filters } : undefined)}`);
+    return http.get<Course[]>(`/courses/${buildQuery(filters ? { ...filters } : undefined)}`);
   },
   /**
    * POST /courses：创建课程时调用。
    * 后端需校验 `code` + `term` 不重复，并返回创建后的 Course（包含 id、时间字段）。
    */
   create(payload: CreateCourseRequest) {
-    return http.post<Course>('/courses', payload);
+    return http.post<Course>('/courses/', payload);
   },
   /**
    * PUT /courses/:id：编辑课程信息时调用。

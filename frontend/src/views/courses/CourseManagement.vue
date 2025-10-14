@@ -272,7 +272,7 @@ const courseFormRef = ref<FormInstance>();
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 11 }, (_, i) => String(currentYear - 5 + i));
-const seasonOptions = ['Spring', 'Summer', 'Fall', 'Winter'];
+const seasonOptions = ['S1', 'S2', 'Summer', 'Winter'];
 
 const courseForm = reactive({
   id: '',
