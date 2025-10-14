@@ -1,0 +1,21 @@
+# macOS system files
+.DS_Store
+
+# Node/Vite artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Environment files
+*.local
+.env
+.env.*
+
+# Editor settings
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
