@@ -8,9 +8,9 @@ frontend/dist/
 frontend/dist-ssr/
 
 # Environment files
-*.local
-.env
-.env.*
+#*.local
+#.env
+#.env.*
 
 # Editor settings
 .vscode/
