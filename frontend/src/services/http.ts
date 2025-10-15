@@ -108,21 +108,48 @@ function requestFactory(method: HttpMethod) {
     send<T>(url, { ...options, method });
 }
 
+function normalizeBase(raw?: string) {
+  const trimmed = (raw || '').trim().replace(/\/+$/, '');
+  if (!trimmed || trimmed === '/api') return '';
+  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+}
+
+const rawBase = import.meta.env.VITE_API_BASE;
+const generalBase = normalizeBase(rawBase);
+const explicitAuthBase = (import.meta.env.VITE_AUTH_BASE || '').trim();
+const authBase =
+  explicitAuthBase ||
+  (generalBase ? `${generalBase.replace(/\/+$/, '')}/api` : '/api');
+
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE, // => '/api'，会被代理到 Django
+  baseURL: generalBase || undefined,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   },
-  withCredentials: false // 如果后面用 Session 登录，可以改 true
-})
+  withCredentials: false, // 如果后面用 Session 登录，可以改 true
+});
+
+const authHttp = axios.create({
+  baseURL: authBase,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: false,
+});
 
 // ✅ 响应拦截器：自动返回后端 JSON 对象
-http.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    console.error('❌ API Error:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
+function attachResponseInterceptor(instance: typeof http) {
+  instance.interceptors.response.use(
+    (response) => response.data,
+    (error) => {
+      console.error('❌ API Error:', error.response?.data || error.message);
+      return Promise.reject(error);
+    },
+  );
+}
 
+attachResponseInterceptor(http);
+attachResponseInterceptor(authHttp);
+
+export { authHttp };
 export default http;

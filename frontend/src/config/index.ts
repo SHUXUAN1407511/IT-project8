@@ -21,10 +21,33 @@ const assignmentTypesEnv = (env.VITE_ASSIGNMENT_TYPES || '')
 
 const defaultAssignmentTypes = ['Project', 'Essay', 'Quiz', 'Reflection', 'Lab'];
 
+const fallbackOrigin =
+  typeof window !== 'undefined' && window.location
+    ? window.location.origin
+    : 'http://127.0.0.1:8000';
+
+function resolveApiBase(raw?: string) {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return fallbackOrigin;
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
+  const withoutApi = withoutTrailingSlash.endsWith('/api')
+    ? withoutTrailingSlash.slice(0, -4)
+    : withoutTrailingSlash;
+
+  if (!withoutApi) return fallbackOrigin;
+  if (/^https?:\/\//.test(withoutApi)) {
+    return withoutApi;
+  }
+  if (withoutApi.startsWith('/')) {
+    return `${fallbackOrigin}${withoutApi === '/' ? '' : withoutApi}`;
+  }
+  return `${fallbackOrigin}/${withoutApi}`;
+}
+
 const envConfig: AppConfig = {
   appName: env.VITE_APP_NAME || 'AI Use Declaration',
   env: (env.VITE_APP_ENV as AppEnv) || (env.DEV ? 'development' : 'production'),
-  apiBase: env.VITE_API_BASE || 'http://localhost:3000/api',
+  apiBase: resolveApiBase(env.VITE_API_BASE),
   routerBase: env.VITE_ROUTER_BASE || '/',
   wsUrl: env.VITE_WS_URL || undefined,
   features: {

@@ -2,7 +2,8 @@
  * 该文件集中定义前端调后端的 REST 接口封装，按业务域归类，便于后端了解请求路径和数据结构。
  *
  * 后端联调说明（请务必阅读）：
- * - 所有路径都挂在 `${appConfig.apiBase}` 下，默认是 `http://localhost:3000/api`，可通过环境变量 `VITE_API_BASE` 覆盖。
+ * - 除登录/注册外，所有接口直接以 `/xxx` 形式调用，`VITE_API_BASE` 会用于拼接后端域名（会自动去掉结尾的 `/api`）。
+ * - 登录与注册依旧通过 `/api/auth/login`、`/api/auth/register` 访问，便于兼容现有后端路由。
  * - 返回格式默认遵循 JSON；若出现错误需返回 4xx/5xx，并在响应体中携带 `message` 字段供前端展示。
  * - 前端会在成功登录后把返回的 `token` 写入 `localStorage`，并把 `user` 对象存入状态，所以对应字段必须出现。
  * - 如需对权限做鉴权，请使用 `Authorization: Bearer <token>` 头部；目前前端只负责传递，不会手动拼 Query。
@@ -15,15 +16,15 @@
             taskkill /IM node.exe /F
 */  
 
-import http from './http';
+import http, { authHttp } from './http';
 // 注册
 export const registerUser = async (payload: { username: string; password: string; role: string }) => {
-  return http.post('auth/register/', payload)
+  return authHttp.post('auth/register/', payload)
 }
 
 // 登录
 export const loginUser = async (payload: { username: string; password: string }) => {
-  return http.post('auth/login/', payload)
+  return authHttp.post('auth/login/', payload)
 }
 
 
@@ -135,7 +136,7 @@ export const AuthAPI = {
    * 后端需校验用户名密码并返回 LoginResponse。若失败请返回 401，body 中提供 `message`。
    */
   login(payload: LoginRequest) {
-    return http.post<LoginResponse>('auth/login/', payload);
+    return authHttp.post<LoginResponse>('auth/login/', payload);
   },
   /**
    * POST /auth/logout：用户退出登录时调用。
@@ -170,7 +171,7 @@ export const AuthAPI = {
    * 需创建账号并返回 RegisterResponse，至少包含新用户的基本信息。若用户名重复请返回 400。
    */
   register(payload: RegisterRequest) {
-    return http.post<RegisterResponse>('/auth/register/', payload);
+    return authHttp.post<RegisterResponse>('auth/register/', payload);
   },
 };
 
