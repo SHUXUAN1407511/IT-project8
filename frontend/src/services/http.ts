@@ -129,6 +129,45 @@ const http = axios.create({
   withCredentials: false, // 如果后面用 Session 登录，可以改 true
 });
 
+http.interceptors.request.use((config) => {
+  const username = (() => {
+    try {
+      return localStorage.getItem('username');
+    } catch (error) {
+      console.warn('Failed to read username from storage', error);
+      return null;
+    }
+  })();
+
+  if (!username) {
+    return config;
+  }
+
+  if (config.params instanceof URLSearchParams) {
+    if (!config.params.has('username')) {
+      config.params.set('username', username);
+    }
+  } else {
+    const currentParams =
+      config.params && typeof config.params === 'object'
+        ? { ...(config.params as Record<string, unknown>) }
+        : {};
+    if (currentParams.username === undefined) {
+      currentParams.username = username;
+      config.params = currentParams;
+    }
+  }
+
+  if (isPlainObject(config.data)) {
+    const body = config.data as Record<string, unknown>;
+    if (body.username === undefined) {
+      config.data = { ...body, username };
+    }
+  }
+
+  return config;
+});
+
 const authHttp = axios.create({
   baseURL: authBase,
   headers: {

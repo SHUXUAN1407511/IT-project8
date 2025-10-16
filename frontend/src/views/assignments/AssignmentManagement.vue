@@ -13,7 +13,11 @@
         >
           Manage assignment types
         </el-button>
-        <el-button type="primary" :disabled="!canManageAssignments" @click="openCreateDialog">
+        <el-button
+          v-if="canManageAssignments"
+          type="primary"
+          @click="openCreateDialog"
+        >
           New assignment
         </el-button>
       </el-space>
@@ -291,7 +295,7 @@ const typeManagerVisible = ref(false);
 const typeManagerList = ref<string[]>([]);
 const newType = ref('');
 const canManageAssignmentTypes = computed(() => userStore.role === 'sc' || userStore.role === 'admin');
-const canManageAssignments = computed(() => userStore.role === 'sc' || userStore.role === 'admin');
+const canManageAssignments = computed(() => ['admin', 'sc'].includes(userStore.role));
 
 const assignmentForm = reactive({
   id: '',
@@ -431,6 +435,50 @@ function onCourseChange() {
 function openCreateDialog() {
   resetForm();
   assignmentDialogVisible.value = true;
+}
+
+function openTypeManager() {
+  typeManagerList.value = [...assignmentTypeOptions.value];
+  newType.value = '';
+  typeManagerVisible.value = true;
+}
+
+function addType() {
+  const trimmed = newType.value.trim();
+  if (!trimmed) {
+    ElMessage.warning('Type name cannot be empty.');
+    return;
+  }
+  const exists = typeManagerList.value.some((item) => item.toLowerCase() === trimmed.toLowerCase());
+  if (exists) {
+    ElMessage.warning('Type already exists.');
+    return;
+  }
+  typeManagerList.value.push(trimmed);
+  newType.value = '';
+}
+
+function removeType(type: string) {
+  typeManagerList.value = typeManagerList.value.filter((item) => item !== type);
+}
+
+function resetTypeManager() {
+  typeManagerList.value = [...appConfig.assignmentTypes];
+  newType.value = '';
+}
+
+function saveTypeManager() {
+  const sanitized = typeManagerList.value
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (!sanitized.length) {
+    ElMessage.warning('Please add at least one type before saving.');
+    return;
+  }
+  const unique = Array.from(new Set(sanitized)) as AssignmentType[];
+  dataStore.setAssignmentTypes(unique);
+  typeManagerVisible.value = false;
+  ElMessage.success('Assignment types updated.');
 }
 
 function openEditDialog(assignment: Assignment) {

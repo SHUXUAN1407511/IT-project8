@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { useUserStore } from '@/store/user';
 import { appConfig } from '@/config';
 import API, {
   type AccountStatus,
@@ -16,6 +17,8 @@ import API, {
   type SaveScaleVersionRequest,
   type ScaleLevel,
   type ScaleRecord,
+  type AIUserScale,
+  type PaginatedResponse,
   type SaveTemplateRequest,
   type TemplateRecord,
   type TemplateRow,
@@ -60,6 +63,81 @@ const loadAssignmentTypes = (): AssignmentType[] => {
 
 type TemplateCache = Record<string, TemplateRecord | null>;
 
+const DEFAULT_SCALE_ID = 'system_default';
+
+interface NormalizedScaleResult {
+  records: ScaleRecord[];
+  index: Record<string, AIUserScale>;
+  membership: Record<string, string[]>;
+}
+
+function toScaleLevel(item: AIUserScale): ScaleLevel {
+  const label = (item.level || '').trim() || (item.name || '').trim() || `Level ${item.id}`;
+  const title = (item.name || '').trim() || label;
+  return {
+    id: String(item.id),
+    label,
+    title,
+    description: '',
+    aiUsage: '',
+    instructions: '',
+    acknowledgement: (item.notes || '').trim() || '',
+  };
+}
+
+function pickLatestTimestamp(items: AIUserScale[]): string {
+  const timestamps = items
+    .map((item) => item.updated_at || item.created_at)
+    .filter((value): value is string => !!value);
+  if (!timestamps.length) {
+    return new Date().toISOString();
+  }
+  return timestamps.reduce((latest, current) => (current > latest ? current : latest));
+}
+
+function normalizeAiUserScales(items: AIUserScale[]): NormalizedScaleResult {
+  const index: Record<string, AIUserScale> = {};
+  const membership: Record<string, string[]> = {};
+  if (!items.length) {
+    return { records: [], index, membership };
+  }
+
+  items.forEach((item) => {
+    index[String(item.id)] = item;
+  });
+
+  const levels = items
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .map(toScaleLevel);
+
+  membership[DEFAULT_SCALE_ID] = levels.map((level) => level.id);
+
+  const username = items[0]?.username || 'system';
+  const normalized: ScaleRecord = {
+    id: DEFAULT_SCALE_ID,
+    name: 'Default Scale',
+    ownerType: 'system',
+    ownerId: username,
+    isPublic: true,
+    currentVersion: {
+      id: `${DEFAULT_SCALE_ID}_current`,
+      version: 1,
+      updatedAt: pickLatestTimestamp(items),
+      updatedBy: username,
+      notes: '',
+      levels,
+    },
+    history: [],
+  };
+
+  return {
+    records: [normalized],
+    index,
+    membership,
+  };
+}
+
 export const useDataStore = defineStore('data', {
   state: () => ({
     courses: [] as Course[],
@@ -67,6 +145,8 @@ export const useDataStore = defineStore('data', {
     assignmentTypes: loadAssignmentTypes(),
     templateCache: {} as TemplateCache,
     scales: [] as ScaleRecord[],
+    scaleIndex: {} as Record<string, AIUserScale>,
+    scaleMembership: {} as Record<string, string[]>,
     notifications: [] as NotificationItem[],
     users: [] as ManagedUser[],
   }),
@@ -204,37 +284,80 @@ export const useDataStore = defineStore('data', {
       return this.templateCache[assignmentId];
     },
 
-    async fetchScales() {
-      const scales = await API.scales.list();
-      this.scales = scales;
-      return scales;
+    async fetchScales(params?: { username?: string }) {
+      const response = await API.scales.list(params);
+      const paged = Array.isArray(response) ? null : (response as PaginatedResponse<AIUserScale>);
+      const items = Array.isArray(response)
+        ? response
+        : Array.isArray(paged?.results)
+          ? paged?.results ?? []
+          : [];
+      const normalized = normalizeAiUserScales(items);
+      this.scales = normalized.records;
+      this.scaleIndex = normalized.index;
+      this.scaleMembership = normalized.membership;
+      return this.scales;
     },
-    async saveScaleVersion(payload: SaveScaleVersionRequest) {
-      const scale = await API.scales.saveVersion(payload);
-      this.upsertScale(scale);
-      return scale;
-    },
-    async createCustomScale(payload: {
-      name: string;
-      ownerId: string;
-      isPublic: boolean;
-      levels: ScaleLevel[];
-      notes?: string;
-      updatedBy: string;
-    }) {
-      const scale = await API.scales.createCustom(payload);
-      this.upsertScale(scale);
-      return scale;
-    },
-    async rollbackScale(scaleId: string, versionId: string, notes?: string) {
-      const scale = await API.scales.rollback(scaleId, versionId, notes);
-      this.upsertScale(scale);
-      return scale;
-    },
-    async toggleScalePublic(scaleId: string, isPublic: boolean) {
-      const scale = await API.scales.toggleVisibility(scaleId, isPublic);
-      this.upsertScale(scale);
-      return scale;
+    async saveScaleVersion(payload: SaveScaleVersionRequest & { updatedBy?: string }) {
+      const userStore = useUserStore();
+      const fallbackUsername =
+        userStore.userInfo?.username || localStorage.getItem('username') || 'system';
+
+      const membership = new Set(this.scaleMembership[payload.scaleId] || []);
+      const seen = new Set<string>();
+
+      const createTasks: Promise<unknown>[] = [];
+      const updateTasks: Promise<unknown>[] = [];
+
+      payload.levels.forEach((level) => {
+        const rawId = level.id ? String(level.id) : '';
+        const label = (level.label || '').trim();
+        let name = (level.title || '').trim();
+        const notes = (level.acknowledgement || '').trim();
+
+        if (!label) {
+          return;
+        }
+        if (!name) {
+          name = label;
+        }
+
+        if (/^\d+$/.test(rawId)) {
+          seen.add(rawId);
+          const existing = this.scaleIndex[rawId];
+          const username = existing?.username || fallbackUsername;
+          const payloadData = {
+            username,
+            level: label,
+            name,
+            notes,
+          };
+          if (
+            !existing ||
+            existing.level !== payloadData.level ||
+            existing.name !== payloadData.name ||
+            (existing.notes || '') !== payloadData.notes
+          ) {
+            updateTasks.push(API.scales.update(rawId, payloadData));
+          }
+        } else {
+          createTasks.push(
+            API.scales.create({
+              username: fallbackUsername,
+              level: label,
+              name,
+              notes,
+            }),
+          );
+        }
+      });
+
+      const deletions = Array.from(membership).filter((id) => !seen.has(id));
+      const deleteTasks = deletions.map((id) => API.scales.remove(id));
+
+      await Promise.all([...updateTasks, ...createTasks, ...deleteTasks]);
+      const records = await this.fetchScales();
+      return records.find((scale) => scale.id === payload.scaleId);
     },
 
     async fetchNotifications() {

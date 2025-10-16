@@ -213,6 +213,16 @@ const coordinatorFilter = ref('');
 const sortState = ref<{ prop: keyof Course | ''; order: 'ascending' | 'descending' | null }>({ prop: '', order: null });
 
 const isAdmin = computed(() => userStore.role === 'admin');
+const currentUserCoordinatorKeys = computed(() => {
+  const keys = new Set<string>();
+  if (userStore.userInfo?.id) {
+    keys.add(String(userStore.userInfo.id));
+  }
+  if (userStore.userInfo?.username) {
+    keys.add(String(userStore.userInfo.username));
+  }
+  return Array.from(keys);
+});
 
 onMounted(async () => {
   await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchUsers()]);
@@ -249,7 +259,10 @@ const filteredCourses = computed(() => {
     const matchesTerm = !termFilter.value || course.term === termFilter.value;
     const matchesCoordinator = !coordinatorFilter.value || course.scId === coordinatorFilter.value;
     if (!isAdmin.value && userStore.userInfo?.id) {
-      return matchesQuery && matchesTerm && course.scId === userStore.userInfo.id;
+      const matchesCurrentUser =
+        currentUserCoordinatorKeys.value.length === 0 ||
+        currentUserCoordinatorKeys.value.includes(course.scId);
+      return matchesQuery && matchesTerm && matchesCurrentUser;
     }
     return matchesQuery && matchesTerm && matchesCoordinator;
   });

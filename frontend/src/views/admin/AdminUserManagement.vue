@@ -4,7 +4,6 @@
       <div>
         <h2>User & Access Management</h2>
       </div>
-      <el-button type="primary" @click="openCreateDialog">New user</el-button>
     </div>
 
     <el-card class="filters" shadow="never">
@@ -68,13 +67,13 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'create' ? 'New user' : 'Edit user'" width="520px">
+    <el-dialog v-model="dialogVisible" title="Edit user" width="520px">
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="100px">
         <el-form-item label="Name" prop="name">
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="Username" prop="username">
-          <el-input v-model="form.username" :disabled="dialogMode === 'edit'" />
+          <el-input v-model="form.username" disabled />
         </el-form-item>
         <el-form-item label="Email" prop="email">
           <el-input v-model="form.email" />
@@ -124,7 +123,6 @@ const filteredUsers = computed(() => {
 });
 
 const dialogVisible = ref(false);
-const dialogMode = ref<'create' | 'edit'>('create');
 const formRef = ref<FormInstance>();
 
 const form = reactive({
@@ -148,14 +146,7 @@ const formRules: FormRules = {
   role: [{ required: true, message: 'Please choose a role.', trigger: 'change' }],
 };
 
-function openCreateDialog() {
-  dialogMode.value = 'create';
-  resetForm();
-  dialogVisible.value = true;
-}
-
 function openEditDialog(user: ManagedUser) {
-  dialogMode.value = 'edit';
   form.id = user.id;
   form.name = user.name;
   form.username = user.username;
@@ -167,42 +158,18 @@ function openEditDialog(user: ManagedUser) {
   dialogVisible.value = true;
 }
 
-function resetForm() {
-  form.id = '';
-  form.name = '';
-  form.username = '';
-  form.email = '';
-  form.role = '';
-  form.phone = '';
-  form.organization = '';
-  form.bio = '';
-}
-
 function submit() {
   formRef.value?.validate(async (valid) => {
     if (!valid) return;
-    if (dialogMode.value === 'create') {
-      await dataStore.createUser({
-        name: form.name,
-        username: form.username,
-        email: form.email,
-        role: form.role as UserRole,
-        phone: form.phone,
-        organization: form.organization,
-        bio: form.bio,
-      });
-      ElMessage.success('User created.');
-    } else {
-      await dataStore.updateUser(form.id, {
-        name: form.name,
-        email: form.email,
-        role: form.role as UserRole,
-        phone: form.phone,
-        organization: form.organization,
-        bio: form.bio,
-      });
-      ElMessage.success('User details updated.');
-    }
+    await dataStore.updateUser(form.id, {
+      name: form.name,
+      email: form.email,
+      role: form.role as UserRole,
+      phone: form.phone,
+      organization: form.organization,
+      bio: form.bio,
+    });
+    ElMessage.success('User details updated.');
     dialogVisible.value = false;
   });
 }
@@ -234,7 +201,7 @@ function formatDate(value?: string) {
 
 <style scoped>
 .user-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.page-header { display: flex; justify-content: flex-start; align-items: center; gap: 16px; }
 .subtitle { color: #606266; }
 .filters { padding: 12px 16px; }
 .filter-row { display: flex; gap: 12px; flex-wrap: wrap; }

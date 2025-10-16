@@ -46,6 +46,13 @@ const buildQuery = (params?: Record<string, unknown>) => {
   return query ? `?${query}` : '';
 };
 
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 /** 用户角色取值，后端在返回 AccountProfile 时保持一致。 */
 export type UserRole = 'admin' | 'sc' | 'tutor';
 /** 账号状态枚举，前端只认 active/inactive。 */
@@ -234,14 +241,14 @@ export const CoursesAPI = {
    * 请根据 id 更新并返回最新 Course。字段未传则不修改。
    */
   update(id: string, payload: UpdateCourseRequest) {
-    return http.put<Course>(`/courses/${id}`, payload);
+    return http.put<Course>(`/courses/${id}/`, payload);
   },
   /**
    * DELETE /courses/:id：删除课程时调用。
    * 建议返回 200 + `{ "message": "deleted" }`，便于前端提示；若存在外键约束需要阻止删除，请返回 409。
    */
   remove(id: string) {
-    return http.delete<void>(`/courses/${id}`);
+    return http.delete<void>(`/courses/${id}/`);
   },
 };
 
@@ -463,41 +470,45 @@ export interface SaveScaleVersionRequest {
   notes?: string;
 }
 
+export interface AIUserScale {
+  id: number;
+  username: string;
+  name: string;
+  level: string;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CreateAIUserScaleRequest = Pick<AIUserScale, 'username' | 'name' | 'level' | 'notes'>;
+export type UpdateAIUserScaleRequest = Partial<CreateAIUserScaleRequest>;
+
 export const ScalesAPI = {
   /**
-   * GET /scales：返回当前用户可见的所有量规（系统默认 + 自定义）。
-   * 若需要分页，可扩展为 `{ items: ScaleRecord[], total: number }`。
+   * GET /scales/：返回当前用户维护的量规条目。
    */
-  list() {
-    return http.get<ScaleRecord[]>('/scales');
+  list(params?: { username?: string }) {
+    return http.get<PaginatedResponse<AIUserScale> | AIUserScale[]>('/scales/', {
+      params,
+    });
   },
   /**
-   * POST /scales/version：保存默认量规新版本时调用。
-   * 需把旧版本写入 `history`，并返回更新后的 ScaleRecord（`currentVersion.version` 自增）。
+   * POST /scales/：新增量规条目。
    */
-  saveVersion(payload: SaveScaleVersionRequest) {
-    return http.post<ScaleRecord>('/scales/version', payload);
+  create(payload: CreateAIUserScaleRequest) {
+    return http.post<AIUserScale>('/scales/', payload);
   },
   /**
-   * POST /scales/custom：创建自定义量规时调用。
-   * 返回新建量规，其中 `currentVersion.version` 固定为 1，`history` 为空数组。
+   * PUT /scales/:id/：更新量规条目。
    */
-  createCustom(payload: { name: string; ownerId: string; isPublic: boolean; levels: ScaleLevel[]; notes?: string }) {
-    return http.post<ScaleRecord>('/scales/custom', payload);
+  update(id: string | number, payload: UpdateAIUserScaleRequest) {
+    return http.put<AIUserScale>(`/scales/${id}/`, payload);
   },
   /**
-   * POST /scales/:scaleId/rollback：回滚到历史版本时调用。
-   * 后端应复制目标历史版本的数据生成新版本，并把操作备注写入 `currentVersion.notes`。
+   * DELETE /scales/:id/：删除量规条目。
    */
-  rollback(scaleId: string, versionId: string, notes?: string) {
-    return http.post<ScaleRecord>(`/scales/${scaleId}/rollback`, { data: { versionId, notes } });
-  },
-  /**
-   * POST /scales/:scaleId/visibility：切换量规公开状态时调用。
-   * 返回更新后的 ScaleRecord；若仅允许拥有者操作，鉴权失败时返回 403。
-   */
-  toggleVisibility(scaleId: string, isPublic: boolean) {
-    return http.post<ScaleRecord>(`/scales/${scaleId}/visibility`, { data: { isPublic } });
+  remove(id: string | number) {
+    return http.delete<void>(`/scales/${id}/`);
   },
 };
 

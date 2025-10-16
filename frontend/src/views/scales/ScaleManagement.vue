@@ -37,8 +37,20 @@
             size="small"
             empty-text="No levels"
           >
-            <el-table-column prop="label" label="Level" width="120" show-overflow-tooltip />
-            <el-table-column prop="title" label="AI Assessment Scale" min-width="200" show-overflow-tooltip />
+            <el-table-column label="Level" width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="cell-text" :title="row.label || '—'">
+                  {{ row.label || '—' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="AI Assessment Scale" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="cell-text" :title="row.title || '—'">
+                  {{ row.title || '—' }}
+                </span>
+              </template>
+            </el-table-column>
             <el-table-column label="Instructions to Students" min-width="240">
               <template #default="{ row }">
                 <span
@@ -65,7 +77,7 @@
                 <el-button
                   link
                   type="danger"
-                  :disabled="!canEditDefault || defaultLevels.length <= 1"
+                  :disabled="!canEditDefault"
                   @click="removeLevel($index)"
                 >
                   Remove
@@ -164,10 +176,12 @@ watch(defaultScale, (scale) => {
       ...level,
       aiUsage: level.aiUsage ?? '',
     }));
+  } else {
+    defaultLevels.value = [];
   }
 });
 
-const canEditDefault = computed(() => userStore.role === 'admin');
+const canEditDefault = computed(() => userStore.role === 'admin' || userStore.role === 'sc');
 
 function generateLevelId(seed: string) {
   const normalized = seed.trim().toLowerCase().replace(/\s+/g, '_') || 'level';
@@ -235,27 +249,19 @@ function saveLevel() {
 }
 
 async function saveDefaultScale() {
-  if (!canEditDefault.value || !defaultScale.value) return;
-  await dataStore.saveScaleVersion(
-    defaultScale.value.id,
-    defaultLevels.value,
-    userStore.userInfo?.name || 'Admin',
-    'Updated default scale',
-  );
+  if (!canEditDefault.value) return;
+  const targetScaleId = defaultScale.value?.id || 'system_default';
+  await dataStore.saveScaleVersion({
+    scaleId: targetScaleId,
+    levels: defaultLevels.value,
+    updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
+    notes: 'Updated default scale',
+  });
   ElMessage.success('Default scale saved as a new version.');
 }
 
-async function rollbackScale(scaleId: string, versionId: string) {
-  if (!canEditDefault.value) return;
-  await dataStore.rollbackScale(scaleId, versionId, userStore.userInfo?.name || 'Admin');
-  const latest = dataStore.scales.find((scale) => scale.id === scaleId);
-  if (latest && scaleId === defaultScale.value?.id) {
-    defaultLevels.value = latest.currentVersion.levels.map((level) => ({
-      ...level,
-      aiUsage: level.aiUsage ?? '',
-    }));
-  }
-  ElMessage.success('New version cloned from history.');
+async function rollbackScale() {
+  ElMessage.warning('Version history is not available in the current backend.');
 }
 
 function formatDate(value?: string) {
@@ -280,7 +286,17 @@ function formatDate(value?: string) {
 .panel-meta { font-size: 12px; color: #909399; text-align: right; display: flex; flex-direction: column; gap: 4px; }
 .history-card { min-height: 100%; }
 .version-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.cell-text { display: inline-block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-text {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  max-width: 100%;
+  min-height: 22px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .muted { color: #909399; font-size: 13px; }
 .empty-message { padding: 24px 0; text-align: center; color: #909399; }
 </style>
