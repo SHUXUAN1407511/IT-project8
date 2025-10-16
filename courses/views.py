@@ -11,28 +11,27 @@ class DefaultPagination(PageNumberPagination):
 
 class CourseViewSet(viewsets.ModelViewSet):
     """
-    /api/courses/           GET / POST
-    /api/courses/{id}/      GET / PUT/PATCH / DELETE
+    /courses/           GET / POST
+    /courses/{id}/      GET / PUT/PATCH / DELETE
 
-    search：
-      - filter：?code=CS101&semester=2025S2
-      - search：?search=tom（search in code/name/teacher）
-      - ordering：?ordering=created_at|-created_at|code|name|semester|credits
-      - paging：?page=1&page_size=20
+    支持：
+    - 搜索：?search=xxx（在 code / Course_name / semester 上）
+    - 排序：?ordering=created_at|-created_at|code|Course_name|semester
+    - 过滤：?code=CS101&semester=2025S1
     """
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = DefaultPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["code", "name", "teacher"]
-    ordering_fields = ["created_at", "updated_at", "code", "name", "semester", "credits"]
-    ordering = ["-created_at"]
+    search_fields = ['code', 'Course_name', 'semester']
+    ordering_fields = ['created_at', 'updated_at', 'code', 'Course_name', 'semester']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         qs = super().get_queryset()
-        code = self.request.query_params.get("code")
-        semester = self.request.query_params.get("semester")
+        code = self.request.query_params.get('code')
+        semester = self.request.query_params.get('semester')
         if code:
             qs = qs.filter(code=code)
         if semester:
@@ -42,4 +41,4 @@ class CourseViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)
-        return Response({"message": "deleted successfully"}, status=status.HTTP_200_OK)
+        return Response({'message': 'deleted successfully'}, status=status.HTTP_200_OK)

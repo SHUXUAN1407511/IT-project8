@@ -1,11 +1,12 @@
 from django.db import models
 
 class Course(models.Model):
-    name = models.CharField(max_length=120)
+    Course_name = models.CharField(max_length=120)
     code = models.CharField(max_length=20, db_index=True)
-    teacher = models.CharField(max_length=120, blank=True)
     semester = models.CharField(max_length=20, db_index=True)
-    credits = models.PositiveIntegerField(default=0)
+    Description = models.TextField(max_length=160)
+    coordinator = models.CharField(max_length=20, db_index=True)
+
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -21,4 +22,4 @@ class Course(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.code} - {self.name} ({self.semester})"
+        return f"{self.code} - {self.Course_name} ({self.semester})"

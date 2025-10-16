@@ -2,52 +2,29 @@ from rest_framework import serializers
 from .models import Course
 
 class CourseSerializer(serializers.ModelSerializer):
-    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
-    updated_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    name = serializers.CharField(source='Course_name', max_length=120)
+    term = serializers.CharField(source='semester', max_length=20)
+    description = serializers.CharField(source='Description', allow_blank=True, required=False)
+    scId = serializers.CharField(source='coordinator', allow_blank=True, required=False)
+
+    createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M:%S", read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', format="%Y-%m-%d %H:%M:%S", read_only=True)
 
     class Meta:
         model = Course
         fields = [
-            "id", "code", "name", "teacher", "semester", "credits",
-            "created_at", "updated_at"
+            'id', 'name', 'code', 'term', 'description', 'scId',
+            'createdAt', 'updatedAt',
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-    def validate_code(self, v):
-        v = (v or "").strip()
-        if not v:
-            raise serializers.ValidationError("code cannot be empty")
-        return v
-
-    def validate_name(self, v):
-        v = (v or "").strip()
-        if not v:
-            raise serializers.ValidationError("name cannot be empty")
-        return v
-
-    def validate_semester(self, v):
-        v = (v or "").strip()
-        if not v:
-            raise serializers.ValidationError("semester cannot be empty")
-        return v
-
-    def validate_credits(self, v):
-        if v is None or v < 0:
-            raise serializers.ValidationError("credits must be a non-negative integer")
-        return v
+        read_only_fields = ['id', 'createdAt', 'updatedAt']
 
     def validate(self, attrs):
-        for k in ["code", "name", "teacher", "semester"]:
-            if k in attrs and isinstance(attrs[k], str):
-                attrs[k] = attrs[k].strip()
-
-        code = attrs.get("code") or getattr(self.instance, "code", None)
-        semester = attrs.get("semester") or getattr(self.instance, "semester", None)
-
-        if code and semester:
-            qs = Course.objects.filter(code=code, semester=semester)
-            if self.instance is not None:
+        code = attrs.get('code') or getattr(self.instance, 'code', None)
+        sem = attrs.get('semester') or getattr(self.instance, 'semester', None)
+        if code and sem:
+            qs = Course.objects.filter(code=code, semester=sem)
+            if self.instance:
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
-                raise serializers.ValidationError({"code": "this code already exists in this semester"})
+                raise serializers.ValidationError({'code': 'code already exists in this term'})
         return attrs
