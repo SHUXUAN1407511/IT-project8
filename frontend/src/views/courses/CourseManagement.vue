@@ -203,6 +203,8 @@ import { Search } from '@element-plus/icons-vue';
 
 const dataStore = useDataStore();
 const userStore = useUserStore();
+const coursesArr = computed(() => Array.isArray(dataStore.courses) ? dataStore.courses : []);
+
 
 
 const searchQuery = ref('');
@@ -236,13 +238,13 @@ const coordinatorOptions = computed(() => {
 
 const termOptions = computed(() => {
   const terms = new Set<string>();
-  dataStore.courses.forEach((course) => terms.add(course.term));
+  coursesArr.value.forEach((course) => terms.add(course.term));
   return Array.from(terms.values()).sort();
 });
 
 const filteredCourses = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
-  return dataStore.courses.filter((course) => {
+  return coursesArr.value.filter((course) => {
     const matchesQuery = !query || course.name.toLowerCase().includes(query) || course.code.toLowerCase().includes(query);
     const matchesTerm = !termFilter.value || course.term === termFilter.value;
     const matchesCoordinator = !coordinatorFilter.value || course.scId === coordinatorFilter.value;
@@ -346,6 +348,24 @@ function openEditCourse(course: Course) {
   courseDialogVisible.value = true;
 }
 
+function getApiErrorMessage(err: any) {
+  const data = err?.response?.data;
+  if (!data) return 'Request failed.';
+  if (typeof data === 'string') return data;
+
+  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
+    return data.non_field_errors[0];
+  }
+
+  for (const key of ['code', 'term', 'name', 'scId', 'description']) {
+    const arr = (data as any)?.[key];
+    if (Array.isArray(arr) && arr.length) return arr[0];
+  }
+
+  return 'Request failed.';
+}
+
+
 function submitCourse() {
   courseFormRef.value?.validate(async (valid) => {
     if (!valid) return;
@@ -356,14 +376,18 @@ function submitCourse() {
       scId: courseForm.scId,
       description: courseForm.description,
     };
-    if (courseForm.id) {
-      await dataStore.updateCourse(courseForm.id, payload);
-      ElMessage.success('Course updated.');
-    } else {
-      await dataStore.addCourse(payload as any);
-      ElMessage.success('Course created.');
+    try {
+      if (courseForm.id) {
+        await dataStore.updateCourse(courseForm.id, payload);
+        ElMessage.success('Course updated.');
+      } else {
+        await dataStore.addCourse(payload as any);
+        ElMessage.success('Course created.');
+      }
+      courseDialogVisible.value = false;
+    } catch (err: any) {
+      ElMessage.error(getApiErrorMessage(err));
     }
-    courseDialogVisible.value = false;
   });
 }
 

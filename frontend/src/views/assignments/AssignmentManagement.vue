@@ -307,6 +307,18 @@ const assignmentRules: FormRules = {
   type: [{ required: true, message: 'Please select an assignment type.', trigger: 'change' }],
 };
 
+/* ========= 新增：安全数组（保证下面的 map/filter 永远作用于数组） ========= */
+const coursesArr = computed(() =>
+  Array.isArray(dataStore.courses) ? dataStore.courses : []
+);
+const assignmentsArr = computed(() =>
+  Array.isArray(dataStore.assignments) ? dataStore.assignments : []
+);
+const tutorsArr = computed(() =>
+  Array.isArray((dataStore as any).tutors) ? (dataStore as any).tutors : []
+);
+/* ===================================================================== */
+
 watch(
   () => assignmentForm.type,
   (value) => {
@@ -318,8 +330,9 @@ watch(
   }
 );
 
+/* —— 改 here：原来 watch dataStore.assignments.map(...) —— */
 watch(
-  () => dataStore.assignments.map((item) => item.type),
+  () => assignmentsArr.value.map((item) => item.type),
   (types) => {
     const normalized = Array.from(
       new Set(types.map((item) => item?.trim()).filter((item): item is string => !!item))
@@ -332,57 +345,22 @@ watch(
   { immediate: true }
 );
 
-function openTypeManager() {
-  typeManagerList.value = [...dataStore.assignmentTypes];
-  newType.value = '';
-  typeManagerVisible.value = true;
-}
-
-function addType() {
-  const value = newType.value.trim();
-  if (!value) {
-    newType.value = '';
-    return;
-  }
-  const exists = typeManagerList.value.some((item) => item.toLowerCase() === value.toLowerCase());
-  if (exists) {
-    ElMessage.warning('That type already exists.');
-    newType.value = '';
-    return;
-  }
-  typeManagerList.value.push(value);
-  newType.value = '';
-}
-
-function removeType(target: string) {
-  typeManagerList.value = typeManagerList.value.filter((item) => item !== target);
-}
-
-function resetTypeManager() {
-  typeManagerList.value = [...appConfig.assignmentTypes];
-}
-
-function saveTypeManager() {
-  dataStore.setAssignmentTypes(typeManagerList.value as AssignmentType[]);
-  ElMessage.success('Assignment types updated.');
-  typeManagerVisible.value = false;
-}
-
+/* —— 改 here：courseOptions 里统一用 coursesArr/assignmentsArr —— */
 const courseOptions = computed(() => {
   if (userStore.role === 'admin') {
-    return dataStore.courses;
+    return coursesArr.value;
   }
   if (userStore.role === 'sc') {
-    return dataStore.courses.filter((course) => course.scId === userStore.userInfo?.id);
+    return coursesArr.value.filter((course) => course.scId === userStore.userInfo?.id);
   }
   if (userStore.role === 'tutor') {
     const tutorId = userStore.userInfo?.id;
     const courseIds = new Set(
-      dataStore.assignments
+      assignmentsArr.value
         .filter((assignment) => assignment.tutorIds.includes(tutorId || ''))
         .map((assignment) => assignment.courseId)
     );
-    return dataStore.courses.filter((course) => courseIds.has(course.id));
+    return coursesArr.value.filter((course) => courseIds.has(course.id));
   }
   return [];
 });
@@ -401,15 +379,18 @@ watch(
   { immediate: true }
 );
 
-const tutorOptions = computed(() => dataStore.tutors);
+const tutorOptions = computed(() => tutorsArr.value);
 
 const filteredAssignments = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
-  return dataStore.assignments.filter((assignment) => {
+  return assignmentsArr.value.filter((assignment) => {
     if (selectedCourseId.value && assignment.courseId !== selectedCourseId.value) {
       return false;
     }
-    if (userStore.role === 'tutor' && !assignment.tutorIds.includes(userStore.userInfo?.id || '')) {
+    if (
+      userStore.role === 'tutor' &&
+      !(Array.isArray(assignment.tutorIds) && assignment.tutorIds.includes(userStore.userInfo?.id || ''))
+    ) {
       return false;
     }
     const matchesQuery = !query || assignment.name.toLowerCase().includes(query);
@@ -436,9 +417,10 @@ function statusLabel(status: string) {
   }
 }
 
-function resolveTutors(ids: string[]) {
-  return tutorOptions.value.filter((tutor) => ids.includes(tutor.id));
+function resolveTutors(ids: string[] = []) {
+  return tutorOptions.value.filter((tutor) => Array.isArray(ids) && ids.includes(tutor.id));
 }
+
 
 function onCourseChange() {
   searchQuery.value = '';

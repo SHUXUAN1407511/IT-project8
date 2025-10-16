@@ -78,10 +78,12 @@ export const useDataStore = defineStore('data', {
       return state.scales.filter((scale) => scale.ownerType === 'sc');
     },
     tutors(state) {
-      return state.users.filter((user) => user.role === 'tutor' && user.status === 'active');
+      const arr = Array.isArray(state.users) ? state.users : [];
+      return arr.filter((user) => user.role === 'tutor' && user.status === 'active');
     },
     coordinators(state) {
-      return state.users.filter((user) => user.role === 'sc' && user.status === 'active');
+      const arr = Array.isArray(state.users) ? state.users : [];
+      return arr.filter((user) => user.role === 'sc' && user.status === 'active');
     },
     templateByAssignment: (state) => (assignmentId: string) => state.templateCache[assignmentId] || null,
   },
@@ -91,10 +93,7 @@ export const useDataStore = defineStore('data', {
       this.assignmentTypes = sanitized;
       if (typeof window !== 'undefined') {
         try {
-          window.localStorage.setItem(
-            ASSIGNMENT_TYPES_STORAGE_KEY,
-            JSON.stringify(this.assignmentTypes)
-          );
+          window.localStorage.setItem(ASSIGNMENT_TYPES_STORAGE_KEY, JSON.stringify(this.assignmentTypes));
         } catch (error) {
           console.warn('[dataStore] Failed to persist assignment types:', error);
         }
@@ -105,9 +104,12 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchCourses(filters?: CourseFilters) {
-      const courses = await API.courses.list(filters);
-      this.courses = courses;
-      return courses;
+      const d = await API.courses.list(filters);
+      this.courses = Array.isArray(d) ? d
+                    : Array.isArray(d?.courses) ? d.courses
+                    : Array.isArray(d?.results) ? d.results
+                    : [];
+      return this.courses;
     },
     async addCourse(payload: CreateCourseRequest) {
       const course = await API.courses.create(payload);
@@ -133,10 +135,13 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchAssignments(filters?: AssignmentFilters) {
-      const assignments = await API.assignments.list(filters);
-      this.assignments = assignments;
-      this.pruneTemplateCache(new Set(assignments.map((assignment) => assignment.id)));
-      return assignments;
+      const d = await API.assignments.list(filters);
+      this.assignments = Array.isArray(d) ? d
+                      : Array.isArray(d?.assignments) ? d.assignments
+                      : Array.isArray(d?.results) ? d.results
+                      : [];
+      this.pruneTemplateCache(new Set(this.assignments.map((assignment) => assignment.id)));
+      return this.assignments;
     },
     async fetchAssignment(id: string) {
       const assignment = await API.assignments.get(id);
@@ -249,9 +254,12 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchUsers() {
-      const users = await API.adminUsers.list();
-      this.users = users;
-      return users;
+      const d = await API.adminUsers.list();
+      this.users = Array.isArray(d) ? d
+                : Array.isArray(d?.users) ? d.users
+                : Array.isArray(d?.results) ? d.results
+                : [];
+      return this.users;
     },
     async createUser(payload: CreateManagedUserRequest) {
       const user = await API.adminUsers.create(payload);
@@ -271,35 +279,23 @@ export const useDataStore = defineStore('data', {
 
     upsertCourse(course: Course) {
       const index = this.courses.findIndex((item) => item.id === course.id);
-      if (index >= 0) {
-        this.courses.splice(index, 1, course);
-      } else {
-        this.courses.push(course);
-      }
+      if (index >= 0) this.courses.splice(index, 1, course);
+      else this.courses.push(course);
     },
     upsertAssignment(assignment: Assignment) {
       const index = this.assignments.findIndex((item) => item.id === assignment.id);
-      if (index >= 0) {
-        this.assignments.splice(index, 1, assignment);
-      } else {
-        this.assignments.push(assignment);
-      }
+      if (index >= 0) this.assignments.splice(index, 1, assignment);
+      else this.assignments.push(assignment);
     },
     upsertScale(scale: ScaleRecord) {
       const index = this.scales.findIndex((item) => item.id === scale.id);
-      if (index >= 0) {
-        this.scales.splice(index, 1, scale);
-      } else {
-        this.scales.push(scale);
-      }
+      if (index >= 0) this.scales.splice(index, 1, scale);
+      else this.scales.push(scale);
     },
     upsertUser(user: ManagedUser) {
       const index = this.users.findIndex((item) => item.id === user.id);
-      if (index >= 0) {
-        this.users.splice(index, 1, user);
-      } else {
-        this.users.push(user);
-      }
+      if (index >= 0) this.users.splice(index, 1, user);
+      else this.users.push(user);
     },
     pruneTemplateCache(validAssignmentIds: Set<string>) {
       Object.keys(this.templateCache).forEach((assignmentId) => {

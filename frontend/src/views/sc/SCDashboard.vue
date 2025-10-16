@@ -53,19 +53,21 @@ import { useDataStore } from '@/store/data';
 const router = useRouter();
 const userStore = useUserStore();
 const dataStore = useDataStore();
+const coursesArr = computed(() => Array.isArray(dataStore.courses) ? dataStore.courses : []);
+const assignmentsArr = computed(() => Array.isArray(dataStore.assignments) ? dataStore.assignments : []);
 
 onMounted(async () => {
   await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchAssignments()]);
 });
 
 const myCourses = computed(() =>
-  dataStore.courses.filter((course) => course.scId === userStore.userInfo?.id)
+  coursesArr.value.filter((course) => course.scId === userStore.userInfo?.id)
 );
 
 const termCount = computed(() => new Set(myCourses.value.map((course) => course.term)).size);
 
 const myAssignments = computed(() =>
-  dataStore.assignments.filter((assignment) => myCourses.value.some((course) => course.id === assignment.courseId))
+  assignmentsArr.value.filter((assignment) => myCourses.value.some((course) => course.id === assignment.courseId))
 );
 
 const draftTemplates = computed(() =>
