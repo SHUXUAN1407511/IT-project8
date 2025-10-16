@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'AIUseScale',
     'courses',
     'template',
+    'exports',
 
 ]
 

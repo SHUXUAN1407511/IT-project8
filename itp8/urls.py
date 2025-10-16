@@ -21,4 +21,5 @@ urlpatterns = [
     path('', include('AIUseScale.urls')),
     path('', include('Assignment.urls')),
     path('', include('courses.urls')),
+    path('export/', include('exports.urls')), #export/excel/  or  export/pdf/
 ]
