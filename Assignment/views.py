@@ -75,6 +75,64 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
         return queryset.distinct()
 
+    def _resolve_request_user(self, request):
+        """
+        Try to resolve the business user making the request.
+        Supports multiple hints (authenticated user, headers, params, payload).
+        """
+        django_user = getattr(request, "user", None)
+        if getattr(django_user, "is_authenticated", False):
+            if hasattr(django_user, "role"):
+                return django_user
+            username = getattr(django_user, "username", None)
+            if username:
+                try:
+                    return User.objects.get(username=username)
+                except User.DoesNotExist:
+                    pass
+
+        candidate_ids = [
+            request.headers.get("X-User-Id"),
+            request.headers.get("X_USER_ID"),
+            request.headers.get("X-USER-ID"),
+            request.query_params.get("userId"),
+            getattr(request.data, "get", lambda _key, _default=None: _default)("userId"),
+        ]
+        for candidate in candidate_ids:
+            if not candidate:
+                continue
+            try:
+                return User.objects.get(pk=candidate)
+            except (User.DoesNotExist, ValueError, TypeError):
+                continue
+
+        candidate_usernames = [
+            request.headers.get("X-User-Username"),
+            request.headers.get("X-User-Name"),
+            request.headers.get("X_USER_NAME"),
+            request.headers.get("X-USERNAME"),
+            request.query_params.get("username"),
+            getattr(request.data, "get", lambda _key, _default=None: _default)("username"),
+        ]
+        for candidate in candidate_usernames:
+            if not candidate:
+                continue
+            try:
+                return User.objects.get(username=candidate)
+            except User.DoesNotExist:
+                continue
+
+        return None
+
+    def create(self, request, *args, **kwargs):
+        user = self._resolve_request_user(request)
+        if user and user.role == "tutor":
+            return Response(
+                {"message": "Tutors are not allowed to create assignments."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().create(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)

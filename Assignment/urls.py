@@ -5,7 +5,7 @@ from .views import AssignmentViewSet
 
 app_name = "Assignment"
 
-router = DefaultRouter()
+router = DefaultRouter(trailing_slash=False)
 router.register(r'assignments', AssignmentViewSet, basename='assignments')
 
 urlpatterns = [
