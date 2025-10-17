@@ -17,8 +17,7 @@ import API, {
   type SaveScaleVersionRequest,
   type ScaleLevel,
   type ScaleRecord,
-  type AIUserScale,
-  type PaginatedResponse,
+  type ScaleVersion,
   type SaveTemplateRequest,
   type TemplateRecord,
   type TemplateRow,
@@ -63,79 +62,27 @@ const loadAssignmentTypes = (): AssignmentType[] => {
 
 type TemplateCache = Record<string, TemplateRecord | null>;
 
-const DEFAULT_SCALE_ID = 'system_default';
-
-interface NormalizedScaleResult {
-  records: ScaleRecord[];
-  index: Record<string, AIUserScale>;
-  membership: Record<string, string[]>;
-}
-
-function toScaleLevel(item: AIUserScale): ScaleLevel {
-  const label = (item.level || '').trim() || (item.name || '').trim() || `Level ${item.id}`;
-  const title = (item.name || '').trim() || label;
+function normalizeScaleLevel(level: ScaleLevel): ScaleLevel {
   return {
-    id: String(item.id),
-    label,
-    title,
-    description: '',
-    aiUsage: '',
-    instructions: '',
-    acknowledgement: (item.notes || '').trim() || '',
+    ...level,
+    instructions: level.instructions ?? '',
+    acknowledgement: level.acknowledgement ?? '',
   };
 }
 
-function pickLatestTimestamp(items: AIUserScale[]): string {
-  const timestamps = items
-    .map((item) => item.updated_at || item.created_at)
-    .filter((value): value is string => !!value);
-  if (!timestamps.length) {
-    return new Date().toISOString();
+function extractArray<T>(input: unknown, keys: string[] = []): T[] {
+  if (Array.isArray(input)) {
+    return input as T[];
   }
-  return timestamps.reduce((latest, current) => (current > latest ? current : latest));
-}
-
-function normalizeAiUserScales(items: AIUserScale[]): NormalizedScaleResult {
-  const index: Record<string, AIUserScale> = {};
-  const membership: Record<string, string[]> = {};
-  if (!items.length) {
-    return { records: [], index, membership };
+  if (input && typeof input === 'object') {
+    for (const key of keys) {
+      const value = (input as Record<string, unknown>)[key];
+      if (Array.isArray(value)) {
+        return value as T[];
+      }
+    }
   }
-
-  items.forEach((item) => {
-    index[String(item.id)] = item;
-  });
-
-  const levels = items
-    .slice()
-    .sort((a, b) => a.id - b.id)
-    .map(toScaleLevel);
-
-  membership[DEFAULT_SCALE_ID] = levels.map((level) => level.id);
-
-  const username = items[0]?.username || 'system';
-  const normalized: ScaleRecord = {
-    id: DEFAULT_SCALE_ID,
-    name: 'Default Scale',
-    ownerType: 'system',
-    ownerId: username,
-    isPublic: true,
-    currentVersion: {
-      id: `${DEFAULT_SCALE_ID}_current`,
-      version: 1,
-      updatedAt: pickLatestTimestamp(items),
-      updatedBy: username,
-      notes: '',
-      levels,
-    },
-    history: [],
-  };
-
-  return {
-    records: [normalized],
-    index,
-    membership,
-  };
+  return [];
 }
 
 export const useDataStore = defineStore('data', {
@@ -145,8 +92,6 @@ export const useDataStore = defineStore('data', {
     assignmentTypes: loadAssignmentTypes(),
     templateCache: {} as TemplateCache,
     scales: [] as ScaleRecord[],
-    scaleIndex: {} as Record<string, AIUserScale>,
-    scaleMembership: {} as Record<string, string[]>,
     notifications: [] as NotificationItem[],
     users: [] as ManagedUser[],
   }),
@@ -184,20 +129,17 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchCourses(filters?: CourseFilters) {
-      const d = await API.courses.list(filters);
-      this.courses = Array.isArray(d) ? d
-                    : Array.isArray(d?.courses) ? d.courses
-                    : Array.isArray(d?.results) ? d.results
-                    : [];
+      const d = (await API.courses.list(filters)) as Course[] | Record<string, unknown>;
+      this.courses = extractArray<Course>(d, ['courses', 'results']);
       return this.courses;
     },
     async addCourse(payload: CreateCourseRequest) {
-      const course = await API.courses.create(payload);
+      const course = (await API.courses.create(payload)) as Course;
       this.upsertCourse(course);
       return course;
     },
     async updateCourse(id: string, payload: UpdateCourseRequest) {
-      const course = await API.courses.update(id, payload);
+      const course = (await API.courses.update(id, payload)) as Course;
       this.upsertCourse(course);
       return course;
     },
@@ -215,26 +157,23 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchAssignments(filters?: AssignmentFilters) {
-      const d = await API.assignments.list(filters);
-      this.assignments = Array.isArray(d) ? d
-                      : Array.isArray(d?.assignments) ? d.assignments
-                      : Array.isArray(d?.results) ? d.results
-                      : [];
+      const d = (await API.assignments.list(filters)) as Assignment[] | Record<string, unknown>;
+      this.assignments = extractArray<Assignment>(d, ['assignments', 'results']);
       this.pruneTemplateCache(new Set(this.assignments.map((assignment) => assignment.id)));
       return this.assignments;
     },
     async fetchAssignment(id: string) {
-      const assignment = await API.assignments.get(id);
+      const assignment = (await API.assignments.get(id)) as Assignment;
       this.upsertAssignment(assignment);
       return assignment;
     },
     async addAssignment(payload: CreateAssignmentRequest) {
-      const assignment = await API.assignments.create(payload);
+      const assignment = (await API.assignments.create(payload)) as Assignment;
       this.upsertAssignment(assignment);
       return assignment;
     },
     async updateAssignment(id: string, payload: UpdateAssignmentRequest) {
-      const assignment = await API.assignments.update(id, payload);
+      const assignment = (await API.assignments.update(id, payload)) as Assignment;
       this.upsertAssignment(assignment);
       return assignment;
     },
@@ -245,7 +184,7 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchTemplate(assignmentId: string) {
-      const template = await API.templates.getByAssignment(assignmentId);
+      const template = (await API.templates.getByAssignment(assignmentId)) as TemplateRecord;
       this.templateCache[assignmentId] = template;
       return template;
     },
@@ -253,11 +192,11 @@ export const useDataStore = defineStore('data', {
       assignmentId: string,
       payload: Omit<SaveTemplateRequest, 'assignmentId'> & { updatedBy?: string }
     ) {
-      const template = await API.templates.save(assignmentId, {
+      const template = (await API.templates.save(assignmentId, {
         assignmentId,
         rows: payload.rows,
         publish: payload.publish,
-      });
+      })) as TemplateRecord;
       this.templateCache[assignmentId] = {
         ...template,
         updatedBy: payload.updatedBy ?? template.updatedBy,
@@ -275,7 +214,7 @@ export const useDataStore = defineStore('data', {
     },
     async refreshTemplate(assignmentId: string) {
       try {
-        const template = await API.templates.getByAssignment(assignmentId);
+        const template = (await API.templates.getByAssignment(assignmentId)) as TemplateRecord;
         this.templateCache[assignmentId] = template;
       } catch (error) {
         this.templateCache[assignmentId] = null;
@@ -284,84 +223,104 @@ export const useDataStore = defineStore('data', {
       return this.templateCache[assignmentId];
     },
 
-    async fetchScales(params?: { username?: string }) {
-      const response = await API.scales.list(params);
-      const paged = Array.isArray(response) ? null : (response as PaginatedResponse<AIUserScale>);
-      const items = Array.isArray(response)
-        ? response
-        : Array.isArray(paged?.results)
-          ? paged?.results ?? []
-          : [];
-      const normalized = normalizeAiUserScales(items);
-      this.scales = normalized.records;
-      this.scaleIndex = normalized.index;
-      this.scaleMembership = normalized.membership;
-      return this.scales;
-    },
-    async saveScaleVersion(payload: SaveScaleVersionRequest & { updatedBy?: string }) {
-      const userStore = useUserStore();
-      const fallbackUsername =
-        userStore.userInfo?.username || localStorage.getItem('username') || 'system';
+    async fetchScales(params?: { ownerType?: string; ownerId?: string }) {
+      const response = (await API.scaleRecords.list(params)) as
+        | ScaleRecord[]
+        | { results?: ScaleRecord[] };
+      let items: ScaleRecord[] = [];
+      if (Array.isArray(response)) {
+        items = response;
+      } else if (Array.isArray(response.results)) {
+        items = response.results ?? [];
+      }
 
-      const membership = new Set(this.scaleMembership[payload.scaleId] || []);
-      const seen = new Set<string>();
+      const normalizeVersion = (version: ScaleVersion | null | undefined): ScaleVersion | null => {
+        if (!version) return null;
+        return {
+          ...version,
+          levels: (version.levels || []).map((level) => normalizeScaleLevel(level)),
+        };
+      };
 
-      const createTasks: Promise<unknown>[] = [];
-      const updateTasks: Promise<unknown>[] = [];
-
-      payload.levels.forEach((level) => {
-        const rawId = level.id ? String(level.id) : '';
-        const label = (level.label || '').trim();
-        let name = (level.title || '').trim();
-        const notes = (level.acknowledgement || '').trim();
-
-        if (!label) {
-          return;
-        }
-        if (!name) {
-          name = label;
-        }
-
-        if (/^\d+$/.test(rawId)) {
-          seen.add(rawId);
-          const existing = this.scaleIndex[rawId];
-          const username = existing?.username || fallbackUsername;
-          const payloadData = {
-            username,
-            level: label,
-            name,
-            notes,
-          };
-          if (
-            !existing ||
-            existing.level !== payloadData.level ||
-            existing.name !== payloadData.name ||
-            (existing.notes || '') !== payloadData.notes
-          ) {
-            updateTasks.push(API.scales.update(rawId, payloadData));
-          }
-        } else {
-          createTasks.push(
-            API.scales.create({
-              username: fallbackUsername,
-              level: label,
-              name,
-              notes,
-            }),
-          );
-        }
+      this.scales = items.map((record) => {
+        const currentVersion = normalizeVersion(record.currentVersion);
+        const history = (record.history || [])
+          .map((entry: ScaleVersion | null | undefined) => normalizeVersion(entry))
+          .filter((entry): entry is ScaleVersion => !!entry);
+        return {
+          ...record,
+          currentVersion,
+          history,
+        };
       });
 
-      const deletions = Array.from(membership).filter((id) => !seen.has(id));
-      const deleteTasks = deletions.map((id) => API.scales.remove(id));
+      return this.scales;
+    },
+    async ensureScaleRecord(options: {
+      name: string;
+      ownerType: 'system' | 'sc';
+      ownerId?: string;
+      isPublic?: boolean;
+    }) {
+      const record = (await API.scaleRecords.create({
+        name: options.name,
+        ownerType: options.ownerType,
+        ownerId: options.ownerId,
+        isPublic: options.isPublic ?? (options.ownerType === 'system'),
+      })) as ScaleRecord;
+      await this.fetchScales({
+        ownerType: options.ownerType,
+        ownerId: options.ownerId,
+      });
+      return record;
+    },
+    async saveScaleVersion(
+      payload: SaveScaleVersionRequest & { updatedBy?: string },
+      options?: {
+        ensureRecord?: {
+          name: string;
+          ownerType: 'system' | 'sc';
+          ownerId?: string;
+          isPublic?: boolean;
+        };
+      },
+    ) {
+      const safeLevels = payload.levels.map((level) => normalizeScaleLevel(level));
 
-      await Promise.all([...updateTasks, ...createTasks, ...deleteTasks]);
-      const records = await this.fetchScales();
-      return records.find((scale) => scale.id === payload.scaleId);
+      try {
+        let targetScaleId = payload.scaleId;
+        if (
+          options?.ensureRecord &&
+          (!targetScaleId || targetScaleId === 'system_default' || !this.scales.find((scale) => scale.id === targetScaleId))
+        ) {
+          const record = await this.ensureScaleRecord(options.ensureRecord);
+          targetScaleId = record.id;
+        }
+
+        await API.scaleRecords.saveVersion({
+          ...payload,
+          scaleId: targetScaleId,
+          levels: safeLevels.map((level) => ({
+            id: level.id,
+            label: level.label,
+            title: level.title,
+            instructions: level.instructions,
+            acknowledgement: level.acknowledgement,
+          })),
+        });
+        const records = await this.fetchScales();
+        return records.find((scale) => scale.id === targetScaleId);
+      } catch (error) {
+        console.warn(
+          '[dataStore] Failed to save scale version via scale-records API:',
+          error,
+        );
+        throw error;
+      }
     },
 
     async fetchNotifications() {
-      const notifications = await API.notifications.list();
+      const notifications = (await API.notifications.list()) as NotificationItem[];
       this.notifications = notifications;
       return notifications;
     },
@@ -377,25 +336,22 @@ export const useDataStore = defineStore('data', {
     },
 
     async fetchUsers() {
-      const d = await API.adminUsers.list();
-      this.users = Array.isArray(d) ? d
-                : Array.isArray(d?.users) ? d.users
-                : Array.isArray(d?.results) ? d.results
-                : [];
+      const d = (await API.adminUsers.list()) as ManagedUser[] | Record<string, unknown>;
+      this.users = extractArray<ManagedUser>(d, ['users', 'results']);
       return this.users;
     },
     async createUser(payload: CreateManagedUserRequest) {
-      const user = await API.adminUsers.create(payload);
+      const user = (await API.adminUsers.create(payload)) as ManagedUser;
       this.upsertUser(user);
       return user;
     },
     async updateUser(id: string, updates: UpdateManagedUserRequest) {
-      const user = await API.adminUsers.update(id, updates);
+      const user = (await API.adminUsers.update(id, updates)) as ManagedUser;
       this.upsertUser(user);
       return user;
     },
     async toggleUserStatus(id: string, status: AccountStatus) {
-      const user = await API.adminUsers.toggleStatus(id, status);
+      const user = (await API.adminUsers.toggleStatus(id, status)) as ManagedUser;
       this.upsertUser(user);
       return user;
     },

@@ -25,8 +25,8 @@
           <div class="panel-header">
             <h3>Default scale levels</h3>
             <div class="panel-meta">
-              <div>Last updated {{ formatDate(defaultScale?.currentVersion.updatedAt) }}</div>
-              <div>By {{ defaultScale?.currentVersion.updatedBy || '—' }}</div>
+              <div>Last updated {{ formatDate(defaultScale?.currentVersion?.updatedAt) }}</div>
+              <div>By {{ defaultScale?.currentVersion?.updatedBy || '—' }}</div>
             </div>
           </div>
 
@@ -106,11 +106,7 @@
                   <span class="muted"> · {{ version.updatedBy }}</span>
                   <p class="muted">{{ version.notes || 'No notes' }}</p>
                 </div>
-                <el-button
-                  size="small"
-                  :disabled="!canEditDefault"
-                  @click="rollbackScale(defaultScale?.id || '', version.id)"
-                >
+                <el-button size="small" :disabled="!canEditDefault" @click="rollbackScale(version)">
                   Clone this version
                 </el-button>
               </div>
@@ -152,7 +148,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
-import { useDataStore, type ScaleLevel } from '@/store/data';
+import { useDataStore, type ScaleLevel, type ScaleVersion } from '@/store/data';
 
 const dataStore = useDataStore();
 const userStore = useUserStore();
@@ -162,20 +158,13 @@ onMounted(async () => {
 });
 const defaultScale = computed(() => dataStore.defaultScale);
 const defaultLevels = ref<ScaleLevel[]>(
-  defaultScale.value
-    ? defaultScale.value.currentVersion.levels.map((level) => ({
-        ...level,
-        aiUsage: level.aiUsage ?? '',
-      }))
-    : [],
+  (defaultScale.value?.currentVersion?.levels || []).map((level) => normalizeLevel(level)),
 );
 
 watch(defaultScale, (scale) => {
-  if (scale) {
-    defaultLevels.value = scale.currentVersion.levels.map((level) => ({
-      ...level,
-      aiUsage: level.aiUsage ?? '',
-    }));
+  const levels = scale?.currentVersion?.levels;
+  if (levels) {
+    defaultLevels.value = levels.map((level) => normalizeLevel(level));
   } else {
     defaultLevels.value = [];
   }
@@ -188,6 +177,16 @@ function generateLevelId(seed: string) {
   return `level_${normalized}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeLevel(seed: Partial<ScaleLevel> = {}): ScaleLevel {
+  return {
+    id: seed.id || generateLevelId('level'),
+    label: seed.label || '',
+    title: seed.title || '',
+    instructions: seed.instructions ?? '',
+    acknowledgement: seed.acknowledgement ?? '',
+  };
+}
+
 const levelDialog = reactive({
   visible: false,
   isEdit: false,
@@ -195,8 +194,6 @@ const levelDialog = reactive({
     id: generateLevelId('level'),
     label: '',
     title: '',
-    description: '',
-    aiUsage: '',
     instructions: '',
     acknowledgement: '',
   } as ScaleLevel,
@@ -205,17 +202,7 @@ const levelDialog = reactive({
 function openLevelDialog(level: ScaleLevel | null) {
   levelDialog.visible = true;
   levelDialog.isEdit = !!level;
-  levelDialog.form = level
-    ? { ...level }
-    : {
-        id: generateLevelId('level'),
-        label: '',
-        title: '',
-        description: '',
-        aiUsage: '',
-        instructions: '',
-        acknowledgement: '',
-      };
+  levelDialog.form = normalizeLevel(level ? { ...level } : {});
 }
 
 function removeLevel(index: number) {
@@ -234,11 +221,11 @@ function saveLevel() {
     ElMessage.error('Level key already exists.');
     return;
   }
-  const entry: ScaleLevel = {
+  const entry = normalizeLevel({
     ...levelDialog.form,
     label,
     id: levelDialog.form.id || generateLevelId(label),
-  };
+  });
   const index = defaultLevels.value.findIndex((item) => item.id === entry.id);
   if (levelDialog.isEdit && index >= 0) {
     defaultLevels.value.splice(index, 1, entry);
@@ -251,17 +238,36 @@ function saveLevel() {
 async function saveDefaultScale() {
   if (!canEditDefault.value) return;
   const targetScaleId = defaultScale.value?.id || 'system_default';
-  await dataStore.saveScaleVersion({
-    scaleId: targetScaleId,
-    levels: defaultLevels.value,
-    updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
-    notes: 'Updated default scale',
-  });
+  await dataStore.saveScaleVersion(
+    {
+      scaleId: targetScaleId,
+      levels: defaultLevels.value,
+      updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
+      notes: 'Updated default scale',
+    },
+    {
+      ensureRecord: {
+        name: 'Default Scale',
+        ownerType: 'system',
+        ownerId: 'system',
+        isPublic: true,
+      },
+    },
+  );
   ElMessage.success('Default scale saved as a new version.');
 }
 
-async function rollbackScale() {
-  ElMessage.warning('Version history is not available in the current backend.');
+function rollbackScale(version: ScaleVersion) {
+  if (!canEditDefault.value) return;
+  const levels = version.levels?.length
+    ? version.levels.map((level) => normalizeLevel(level))
+    : [];
+  if (!levels.length) {
+    ElMessage.warning('No levels found in the selected version.');
+    return;
+  }
+  defaultLevels.value = levels;
+  ElMessage.success(`Loaded v${version.version} into the editor. Save to create a new version.`);
 }
 
 function formatDate(value?: string) {

@@ -2,7 +2,7 @@
 import router from '@/router';
 import { ElMessage } from 'element-plus';
 import { appConfig } from '@/config';
-import axios from 'axios';
+import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -121,13 +121,33 @@ const authBase =
   explicitAuthBase ||
   (generalBase ? `${generalBase.replace(/\/+$/, '')}/api` : '/api');
 
+type TypedAxiosInstance = AxiosInstance & {
+  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T>;
+  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T>;
+  post<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig,
+  ): Promise<T>;
+  put<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig,
+  ): Promise<T>;
+  patch<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig,
+  ): Promise<T>;
+};
+
 const http = axios.create({
   baseURL: generalBase || undefined,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: false, // 如果后面用 Session 登录，可以改 true
-});
+}) as TypedAxiosInstance;
 
 http.interceptors.request.use((config) => {
   const username = (() => {
@@ -174,10 +194,10 @@ const authHttp = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: false,
-});
+}) as TypedAxiosInstance;
 
 // ✅ 响应拦截器：自动返回后端 JSON 对象
-function attachResponseInterceptor(instance: typeof http) {
+function attachResponseInterceptor(instance: TypedAxiosInstance) {
   instance.interceptors.response.use(
     (response) => response.data,
     (error) => {

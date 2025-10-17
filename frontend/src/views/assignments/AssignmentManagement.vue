@@ -271,7 +271,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import { useUserStore } from '@/store/user';
-import { useDataStore, type Assignment, type AssignmentType } from '@/store/data';
+import { useDataStore, type Assignment, type AssignmentType, type ManagedUser } from '@/store/data';
 import { appConfig } from '@/config';
 
 const router = useRouter();
@@ -422,7 +422,8 @@ function statusLabel(status: string) {
 }
 
 function resolveTutors(ids: string[] = []) {
-  return tutorOptions.value.filter((tutor) => Array.isArray(ids) && ids.includes(tutor.id));
+  const idSet = new Set(ids);
+  return tutorOptions.value.filter((tutor: ManagedUser) => idSet.has(tutor.id));
 }
 
 
@@ -511,7 +512,7 @@ function submitAssignment() {
       await dataStore.updateAssignment(assignmentForm.id, payload);
       ElMessage.success('Assignment updated.');
     } else {
-      const created = await dataStore.addAssignment(payload);
+      const created = (await dataStore.addAssignment(payload)) as Assignment;
       selectedCourseId.value = created.courseId;
       ElMessage.success('Assignment created.');
     }

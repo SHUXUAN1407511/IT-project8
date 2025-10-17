@@ -7,7 +7,7 @@
         <el-card shadow="hover">
           <div class="card-title">{{ card.title }}</div>
           <div class="card-value">{{ card.value }}</div>
-          <div class="card-extra">{{ card.extra }}</div>
+          <div v-if="card.extra" class="card-extra">{{ card.extra }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -20,10 +20,21 @@
             <el-button type="primary" link @click="router.push('/scales')">Open management</el-button>
           </div>
           <el-descriptions :column="1" size="small" border>
-            <el-descriptions-item label="Version">v{{ defaultScale?.currentVersion.version }}</el-descriptions-item>
-            <el-descriptions-item label="Updated by">{{ defaultScale?.currentVersion.updatedBy }}</el-descriptions-item>
-            <el-descriptions-item label="Updated at">{{ formatDate(defaultScale?.currentVersion.updatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="Notes">{{ defaultScale?.currentVersion.notes || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="Version">
+              <template #default>
+                <span v-if="defaultScale?.currentVersion">v{{ defaultScale.currentVersion.version }}</span>
+                <span v-else>—</span>
+              </template>
+            </el-descriptions-item>
+            <el-descriptions-item label="Updated by">
+              {{ defaultScale?.currentVersion?.updatedBy || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="Updated at">
+              {{ formatDate(defaultScale?.currentVersion?.updatedAt) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="Notes">
+              {{ defaultScale?.currentVersion?.notes || '—' }}
+            </el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -69,7 +80,13 @@ onMounted(async () => {
 
 const defaultScale = computed(() => dataStore.defaultScale);
 
-const summaryCards = computed(() => [
+interface SummaryCard {
+  title: string;
+  value: number;
+  extra?: string;
+}
+
+const summaryCards = computed<SummaryCard[]>(() => [
   {
     title: 'Total users',
     value: dataStore.users.length,

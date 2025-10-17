@@ -421,14 +421,12 @@ export const TemplatesAPI = {
 /* -------------------------------------------------------------------------- */
 
 /**
- * ScaleLevel：量规的单个等级配置，id/label/title/description/aiUsage/instructions/acknowledgement 均为 string，带问号的字段可选。
+ * ScaleLevel：量规的单个等级配置，id/label/title/instructions/acknowledgement 均为 string，带问号的字段可选。
  */
 export interface ScaleLevel {
   id: string;
   label: string;
   title?: string;
-  description: string;
-  aiUsage: string;
   instructions?: string;
   acknowledgement?: string;
 }
@@ -457,8 +455,15 @@ export interface ScaleRecord {
   ownerType: 'system' | 'sc';
   ownerId?: string;
   isPublic: boolean;
-  currentVersion: ScaleVersion;
+  currentVersion: ScaleVersion | null;
   history: ScaleVersion[];
+}
+
+export interface CreateScaleRecordRequest {
+  name: string;
+  ownerType: 'system' | 'sc';
+  ownerId?: string;
+  isPublic?: boolean;
 }
 
 /**
@@ -470,45 +475,17 @@ export interface SaveScaleVersionRequest {
   notes?: string;
 }
 
-export interface AIUserScale {
-  id: number;
-  username: string;
-  name: string;
-  level: string;
-  notes?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type CreateAIUserScaleRequest = Pick<AIUserScale, 'username' | 'name' | 'level' | 'notes'>;
-export type UpdateAIUserScaleRequest = Partial<CreateAIUserScaleRequest>;
-
-export const ScalesAPI = {
-  /**
-   * GET /scales/：返回当前用户维护的量规条目。
-   */
-  list(params?: { username?: string }) {
-    return http.get<PaginatedResponse<AIUserScale> | AIUserScale[]>('/scales/', {
+export const ScaleRecordsAPI = {
+  list(params?: { ownerType?: string; ownerId?: string; isPublic?: string | number }) {
+    return http.get<PaginatedResponse<ScaleRecord> | ScaleRecord[]>('/scale-records/', {
       params,
     });
   },
-  /**
-   * POST /scales/：新增量规条目。
-   */
-  create(payload: CreateAIUserScaleRequest) {
-    return http.post<AIUserScale>('/scales/', payload);
+  create(payload: CreateScaleRecordRequest) {
+    return http.post<ScaleRecord>('/scale-records/', payload);
   },
-  /**
-   * PUT /scales/:id/：更新量规条目。
-   */
-  update(id: string | number, payload: UpdateAIUserScaleRequest) {
-    return http.put<AIUserScale>(`/scales/${id}/`, payload);
-  },
-  /**
-   * DELETE /scales/:id/：删除量规条目。
-   */
-  remove(id: string | number) {
-    return http.delete<void>(`/scales/${id}/`);
+  saveVersion(payload: SaveScaleVersionRequest & { updatedBy?: string }) {
+    return http.post<ScaleRecord>('/scale-records/save_version/', payload);
   },
 };
 
@@ -583,6 +560,7 @@ export interface CreateManagedUserRequest {
   role: UserRole;
   phone?: string;
   organization?: string;
+  bio?: string;
 }
 
 /**
@@ -631,7 +609,7 @@ export const API = {
   courses: CoursesAPI,
   assignments: AssignmentsAPI,
   templates: TemplatesAPI,
-  scales: ScalesAPI,
+  scaleRecords: ScaleRecordsAPI,
   notifications: NotificationsAPI,
   adminUsers: AdminUsersAPI,
 };

@@ -317,11 +317,13 @@ function findScaleById(id: string) {
 
 function findScaleContainingLevel(levelId: string) {
   return scaleOptions.value.find((scale) =>
-    scale.currentVersion.levels.some((level) => level.id === levelId)
+    scale.currentVersion?.levels?.some((level) => level.id === levelId),
   );
 }
 
-const levelOptions = computed(() => findScaleById(selectedScaleId.value)?.currentVersion.levels || []);
+const levelOptions = computed(
+  () => findScaleById(selectedScaleId.value)?.currentVersion?.levels || [],
+);
 
 watch(
   () => route.params.assignmentId,

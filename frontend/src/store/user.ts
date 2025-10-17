@@ -20,10 +20,10 @@ export const useUserStore = defineStore('user', {
   },
   actions: {
     async login(payload: { username: string; password: string }) {
-      const response = await API.auth.login({
+      const response = (await API.auth.login({
         username: payload.username,
         password: payload.password,
-      });
+      })) as LoginResponse;
       this.applyLoginState(payload, response);
     },
     async register(payload: { username: string; password: string; role: UserRole }) {
