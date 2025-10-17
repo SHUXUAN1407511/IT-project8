@@ -118,7 +118,7 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
         SaveScaleVersionRequest：
         {
           "scaleId": "uuid",
-          "levels": [{ id,label,title?,description,aiUsage,instructions?,acknowledgement? }, ...],
+          "levels": [{ id,label,title?,description?,aiUsage?,instructions?,acknowledgement? }, ...],
           "notes": "optional",
           "updatedBy": "optional string"
         }
@@ -154,13 +154,13 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
             for idx, lv in enumerate(levels):
                 bulk_levels.append(
                     ScaleLevel(
-                        id=lv["id"],
                         version=version,
                         position=idx,
+                        level_code=lv["level_code"],
                         label=lv["label"],
                         title=lv.get("title") or None,
-                        description=lv["description"],
-                        ai_usage=lv["aiUsage"],
+                        description=lv.get("description") or "",
+                        ai_usage=lv.get("aiUsage") or "",
                         instructions=lv.get("instructions") or None,
                         acknowledgement=lv.get("acknowledgement") or None,
                     )

@@ -73,9 +73,10 @@ class ScaleVersion(models.Model):
 
 
 class ScaleLevel(models.Model):
-    id = models.CharField(primary_key=True, max_length=64)
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     version = models.ForeignKey(ScaleVersion, related_name="levels", on_delete=models.CASCADE)
     position = models.IntegerField()
+    level_code = models.CharField(max_length=64)
     label = models.CharField(max_length=255)
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField()
@@ -85,7 +86,8 @@ class ScaleLevel(models.Model):
 
     class Meta:
         db_table = "scale_level"
+        unique_together = (("version", "level_code"),)
         ordering = ["position"]
 
     def __str__(self):
-        return f"{self.id} @ v{self.version.version}"
+        return f"{self.level_code} @ v{self.version.version}"

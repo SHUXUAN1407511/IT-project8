@@ -36,7 +36,9 @@ class AIUserScaleSerializer(serializers.ModelSerializer):
 # 新接口：/scale-records/
 # -------------------------
 class ScaleLevelSerializer(serializers.ModelSerializer):
-    aiUsage = serializers.CharField(source="ai_usage")
+    id = serializers.CharField(source="level_code", max_length=64)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    aiUsage = serializers.CharField(source="ai_usage", required=False, allow_blank=True, allow_null=True)
     acknowledgement = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     instructions = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
@@ -44,7 +46,7 @@ class ScaleLevelSerializer(serializers.ModelSerializer):
         model = ScaleLevel
         fields = [
             "id", "label", "title", "description",
-            "aiUsage", "instructions", "acknowledgement"
+            "aiUsage", "instructions", "acknowledgement",
         ]
 
 
