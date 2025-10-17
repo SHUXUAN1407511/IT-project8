@@ -17,7 +17,7 @@
         </el-table-column>
         <el-table-column label="Action" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push({ name: 'TemplateEditor', params: { assignmentId: row.id } })">
+            <el-button link type="primary" @click="router.push({ name: 'TemplateEditor', params: { assignmentId: String(row.id) } })">
               Edit template
             </el-button>
           </template>
@@ -42,12 +42,19 @@ onMounted(async () => {
 });
 
 const assignedAssignments = computed(() => {
-  const tutorId = userStore.userInfo?.id || '';
+  const tutorId = String(userStore.userInfo?.id ?? '');
   return dataStore.assignments
-    .filter((assignment) => assignment.tutorIds.includes(tutorId))
+    .filter(
+      (assignment) =>
+        Array.isArray(assignment.tutorIds) &&
+        assignment.tutorIds.map((value) => String(value)).includes(tutorId)
+    )
     .map((assignment) => ({
       ...assignment,
-      courseName: dataStore.courses.find((course) => course.id === assignment.courseId)?.name || '—',
+      id: String(assignment.id),
+      courseName:
+        dataStore.courses.find((course) => String(course.id) === String(assignment.courseId))?.name ||
+        '—',
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 });

@@ -62,11 +62,45 @@ const loadAssignmentTypes = (): AssignmentType[] => {
 
 type TemplateCache = Record<string, TemplateRecord | null>;
 
+const LEVEL_INSTRUCTION_KEYS = [
+  'instructions',
+  'instructionsToStudents',
+  'studentInstructions',
+  'instructions_students',
+  'instruction',
+  'description',
+];
+
+const LEVEL_ACKNOWLEDGEMENT_KEYS = [
+  'acknowledgement',
+  'aiAcknowledgement',
+  'aiAcknowledgment',
+  'acknowledgementText',
+  'acknowledgements',
+  'acknowledgment',
+];
+
+const hasNonEmptyText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+function extractLevelField(
+  level: ScaleLevel | Record<string, unknown>,
+  candidateKeys: string[],
+): string {
+  const record = level as Record<string, unknown>;
+  for (const key of candidateKeys) {
+    if (hasNonEmptyText(record[key])) {
+      return String(record[key]);
+    }
+  }
+  return '';
+}
+
 function normalizeScaleLevel(level: ScaleLevel): ScaleLevel {
   return {
     ...level,
-    instructions: level.instructions ?? '',
-    acknowledgement: level.acknowledgement ?? '',
+    instructions: extractLevelField(level, LEVEL_INSTRUCTION_KEYS),
+    acknowledgement: extractLevelField(level, LEVEL_ACKNOWLEDGEMENT_KEYS),
   };
 }
 

@@ -9,7 +9,8 @@
         <el-button
           type="primary"
           plain
-          :disabled="!editableRows.length"
+          :disabled="isExporting || !editableRows.length"
+          :loading="isExporting"
           @click="exportTemplate('pdf')"
         >
           Export PDF
@@ -17,7 +18,8 @@
         <el-button
           type="primary"
           plain
-          :disabled="!editableRows.length"
+          :disabled="isExporting || !editableRows.length"
+          :loading="isExporting"
           @click="exportTemplate('xlsx')"
         >
           Export Excel
@@ -40,20 +42,7 @@
     </div>
 
     <el-card class="filters" shadow="never">
-      <div class="filter-row">
-        <el-select
-          v-model="selectedAssignmentId"
-          placeholder="Choose assignment"
-          filterable
-          class="filter-item"
-        >
-          <el-option
-            v-for="item in assignmentOptions"
-            :key="item.id"
-            :label="`${item.name} · ${item.course}`"
-            :value="item.id"
-          />
-        </el-select>
+      <div v-if="assignment" class="filter-row">
         <el-select
           v-model="selectedScaleId"
           placeholder="Select AI Use Scale"
@@ -68,6 +57,10 @@
           />
         </el-select>
       </div>
+      <div v-else-if="assignmentsLoaded" class="filter-empty">
+        No assignment selected. Use "Manage template" from an assignment to open its template.
+      </div>
+      <div v-else class="filter-empty">Loading assignment...</div>
     </el-card>
 
     <el-card v-if="assignment" shadow="never" class="panel">
@@ -121,7 +114,8 @@
               v-model="row.instructions"
               type="textarea"
               :rows="3"
-              :disabled="!canEdit"
+              readonly
+              class="readonly-area"
             />
           </template>
         </el-table-column>
@@ -151,7 +145,8 @@
               v-model="row.acknowledgement"
               type="textarea"
               :rows="3"
-              :disabled="!canEdit"
+              readonly
+              class="readonly-area"
             />
           </template>
         </el-table-column>
@@ -218,11 +213,13 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
+import http from '@/services/http';
 import {
   useDataStore,
   type Assignment,
   type TemplateRow,
   type ScaleRecord,
+  type ScaleLevel,
 } from '@/store/data';
 
 const route = useRoute();
@@ -230,37 +227,72 @@ const router = useRouter();
 const userStore = useUserStore();
 const dataStore = useDataStore();
 
-const selectedAssignmentId = ref<string>(route.params.assignmentId as string || '');
+const asString = (value: unknown) => (value === undefined || value === null ? '' : String(value));
+
+const initialRouteAssignmentId = ref(
+  typeof route.params.assignmentId === 'string' ? (route.params.assignmentId as string) : ''
+);
+const selectedAssignmentId = ref<string>(initialRouteAssignmentId.value);
+const assignmentsLoaded = ref(false);
 
 const assignmentOptions = computed(() => {
+  const assignments = Array.isArray(dataStore.assignments) ? dataStore.assignments : [];
+  const courses = Array.isArray(dataStore.courses) ? dataStore.courses : [];
+
+  const courseNameById = (courseId: unknown) => {
+    const targetId = asString(courseId);
+    if (!targetId) return '—';
+    const course = courses.find((item) => asString(item.id) === targetId);
+    return course?.name || '—';
+  };
+
   if (userStore.role === 'admin') {
-    return dataStore.assignments.map((assignment) => ({
-      id: assignment.id,
-      name: assignment.name,
-      course: dataStore.courses.find((course) => course.id === assignment.courseId)?.name || '—',
-    }));
+    return assignments.map((assignment) => {
+      const id = asString(assignment.id);
+      return {
+        id,
+        name: assignment.name,
+        course: courseNameById(assignment.courseId),
+      };
+    });
   }
+
   if (userStore.role === 'sc') {
-    const courseIds = dataStore.courses
-      .filter((course) => course.scId === userStore.userInfo?.id)
-      .map((course) => course.id);
-    return dataStore.assignments
-      .filter((assignment) => courseIds.includes(assignment.courseId))
-      .map((assignment) => ({
-        id: assignment.id,
-        name: assignment.name,
-        course: dataStore.courses.find((course) => course.id === assignment.courseId)?.name || '—',
-      }));
+    const userId = asString(userStore.userInfo?.id);
+    const courseIds = courses
+      .filter((course) => asString(course.scId) === userId)
+      .map((course) => asString(course.id));
+
+    return assignments
+      .filter((assignment) => courseIds.includes(asString(assignment.courseId)))
+      .map((assignment) => {
+        const id = asString(assignment.id);
+        return {
+          id,
+          name: assignment.name,
+          course: courseNameById(assignment.courseId),
+        };
+      });
   }
+
   if (userStore.role === 'tutor') {
-    return dataStore.assignments
-      .filter((assignment) => assignment.tutorIds.includes(userStore.userInfo?.id || ''))
-      .map((assignment) => ({
-        id: assignment.id,
-        name: assignment.name,
-        course: dataStore.courses.find((course) => course.id === assignment.courseId)?.name || '—',
-      }));
+    const tutorId = asString(userStore.userInfo?.id);
+    return assignments
+      .filter(
+        (assignment) =>
+          Array.isArray(assignment.tutorIds) &&
+          assignment.tutorIds.map((value) => asString(value)).includes(tutorId)
+      )
+      .map((assignment) => {
+        const id = asString(assignment.id);
+        return {
+          id,
+          name: assignment.name,
+          course: courseNameById(assignment.courseId),
+        };
+      });
   }
+
   return [];
 });
 
@@ -268,27 +300,41 @@ watch(
   assignmentOptions,
   (options) => {
     if (!options.length) {
-      selectedAssignmentId.value = '';
+      if (assignmentsLoaded.value) {
+        initialRouteAssignmentId.value = '';
+        selectedAssignmentId.value = '';
+      }
       return;
     }
-    if (!selectedAssignmentId.value || !options.some((item) => item.id === selectedAssignmentId.value)) {
-      selectedAssignmentId.value = options[0].id;
+    const currentId = selectedAssignmentId.value;
+    if (currentId && options.some((item) => item.id === currentId)) {
+      return;
     }
+    const initialId = initialRouteAssignmentId.value;
+    if (initialId && options.some((item) => item.id === initialId)) {
+      selectedAssignmentId.value = initialId;
+      return;
+    }
+    selectedAssignmentId.value = options[0].id;
   },
   { immediate: true }
 );
 
-const assignment = computed<Assignment | undefined>(() =>
-  dataStore.assignments.find((item) => item.id === selectedAssignmentId.value)
-);
+const assignment = computed<Assignment | undefined>(() => {
+  const targetId = selectedAssignmentId.value;
+  if (!targetId) return undefined;
+  return dataStore.assignments.find((item) => asString(item.id) === targetId);
+});
 
 const courseLabel = computed(() => {
   if (!assignment.value) return '';
-  const course = dataStore.courses.find((c) => c.id === assignment.value?.courseId);
+  const courseId = asString(assignment.value.courseId);
+  const course = dataStore.courses.find((c) => asString(c.id) === courseId);
   return course ? `${course.name} · ${course.term}` : '';
 });
 
 const editableRows = ref<TemplateRow[]>([]);
+const isExporting = ref(false);
 
 const templateRecord = computed(() =>
   dataStore.templateByAssignment(selectedAssignmentId.value)
@@ -311,13 +357,53 @@ const scaleOptions = computed<ScaleRecord[]>(() => {
 
 const selectedScaleId = ref('');
 
+const sameId = (a: unknown, b: unknown) => asString(a) === asString(b);
+const hasNonEmptyText = (value: unknown) =>
+  typeof value === 'string' ? value.trim().length > 0 : !!value;
+
+function readLevelInstructions(level: Partial<TemplateRow> | ScaleLevel | undefined | null) {
+  if (!level) return '';
+  const candidates = [
+    (level as ScaleLevel).instructions,
+    (level as Record<string, unknown>)?.instructionsToStudents,
+    (level as Record<string, unknown>)?.studentInstructions,
+    (level as Record<string, unknown>)?.instructions_students,
+    (level as Record<string, unknown>)?.instruction,
+    (level as Record<string, unknown>)?.description,
+  ];
+  for (const candidate of candidates) {
+    if (hasNonEmptyText(candidate)) {
+      return String(candidate);
+    }
+  }
+  return '';
+}
+
+function readLevelAcknowledgement(level: Partial<TemplateRow> | ScaleLevel | undefined | null) {
+  if (!level) return '';
+  const candidates = [
+    (level as ScaleLevel).acknowledgement,
+    (level as Record<string, unknown>)?.acknowledgementText,
+    (level as Record<string, unknown>)?.acknowledgment,
+    (level as Record<string, unknown>)?.acknowledgements,
+    (level as Record<string, unknown>)?.aiAcknowledgement,
+    (level as Record<string, unknown>)?.aiAcknowledgment,
+  ];
+  for (const candidate of candidates) {
+    if (hasNonEmptyText(candidate)) {
+      return String(candidate);
+    }
+  }
+  return '';
+}
+
 function findScaleById(id: string) {
-  return scaleOptions.value.find((scale) => scale.id === id);
+  return scaleOptions.value.find((scale) => sameId(scale.id, id));
 }
 
 function findScaleContainingLevel(levelId: string) {
   return scaleOptions.value.find((scale) =>
-    scale.currentVersion?.levels?.some((level) => level.id === levelId),
+    scale.currentVersion?.levels?.some((level) => sameId(level.id, levelId)),
   );
 }
 
@@ -328,16 +414,19 @@ const levelOptions = computed(
 watch(
   () => route.params.assignmentId,
   (val) => {
-    if (typeof val === 'string') {
-      selectedAssignmentId.value = val;
-      hydrateTemplate();
+    if (val === undefined || val === null || val === '') {
+      initialRouteAssignmentId.value = '';
+      return;
     }
+    const normalized = asString(val);
+    initialRouteAssignmentId.value = normalized;
+    selectedAssignmentId.value = normalized;
   }
 );
 
 watch(selectedAssignmentId, (id) => {
   if (id) {
-    if (route.params.assignmentId !== id) {
+    if (asString(route.params.assignmentId) !== id) {
       router.replace({ name: 'TemplateEditor', params: { assignmentId: id } });
     }
     void dataStore.refreshTemplate(id);
@@ -361,10 +450,17 @@ watch(selectedScaleId, () => {
   syncRowsWithScale();
 });
 
+watch(
+  levelOptions,
+  () => {
+    syncRowsWithScale();
+  },
+  { deep: true }
+);
+
 function hydrateTemplate() {
   if (!assignment.value) {
     editableRows.value = [];
-    selectedScaleId.value = scaleOptions.value[0]?.id || '';
     return;
   }
   const record = templateRecord.value;
@@ -390,6 +486,7 @@ onMounted(async () => {
     dataStore.fetchUsers(),
     dataStore.fetchScales(),
   ]);
+  assignmentsLoaded.value = true;
   if (selectedAssignmentId.value) {
     await dataStore.refreshTemplate(selectedAssignmentId.value);
   }
@@ -399,7 +496,7 @@ onMounted(async () => {
 watch(templateRecord, (record) => {
   if (record) {
     editableRows.value = record.rows.map((row) => withRowDefaults(row));
-  } else if (!assignment.value) {
+  } else {
     editableRows.value = [];
   }
   syncRowsWithScale();
@@ -410,10 +507,16 @@ const canEdit = computed(() => {
   if (!userStore.isAuthenticated) return false;
   if (userStore.role === 'admin') return true;
   if (userStore.role === 'sc') {
-    return assignment.value && dataStore.courses.find((c) => c.id === assignment.value?.courseId)?.scId === userStore.userInfo?.id;
+    const course = dataStore.courses.find(
+      (c) => asString(c.id) === asString(assignment.value?.courseId)
+    );
+    return course?.scId === asString(userStore.userInfo?.id);
   }
   if (userStore.role === 'tutor') {
-    return assignment.value.tutorIds.includes(userStore.userInfo?.id || '');
+    const tutorId = asString(userStore.userInfo?.id);
+    return Array.isArray(assignment.value.tutorIds)
+      ? assignment.value.tutorIds.map((value) => asString(value)).includes(tutorId)
+      : false;
   }
   return false;
 });
@@ -429,8 +532,8 @@ function addRow() {
       id: generateRowId(),
       levelId: defaultLevel.id,
       levelLabel: defaultLevel.label,
-      instructions: defaultLevel.instructions ?? '',
-      acknowledgement: defaultLevel.acknowledgement ?? '',
+      instructions: readLevelInstructions(defaultLevel),
+      acknowledgement: readLevelAcknowledgement(defaultLevel),
     }),
   );
 }
@@ -450,8 +553,8 @@ function onLevelChange(row: TemplateRow, levelId: string) {
   const level = findLevel(levelId);
   if (!level) return;
   row.levelLabel = level.label;
-  row.instructions = level.instructions ?? '';
-  row.acknowledgement = level.acknowledgement ?? '';
+  row.instructions = readLevelInstructions(level);
+  row.acknowledgement = readLevelAcknowledgement(level);
 }
 
 function syncRowsWithScale() {
@@ -460,20 +563,22 @@ function syncRowsWithScale() {
     const match = findLevel(row.levelId);
     if (match) {
       row.levelLabel = match.label;
+      row.instructions = readLevelInstructions(match);
+      row.acknowledgement = readLevelAcknowledgement(match);
       return;
     }
     const fallback = levelOptions.value[0];
     if (!fallback) return;
     row.levelId = fallback.id;
     row.levelLabel = fallback.label;
-    row.instructions = fallback.instructions ?? '';
-    row.acknowledgement = fallback.acknowledgement ?? '';
+    row.instructions = readLevelInstructions(fallback);
+    row.acknowledgement = readLevelAcknowledgement(fallback);
   });
 }
 
 function findLevel(levelId?: string) {
   if (!levelId) return levelOptions.value[0];
-  return levelOptions.value.find((item) => item.id === levelId) || levelOptions.value[0];
+  return levelOptions.value.find((item) => sameId(item.id, levelId)) || levelOptions.value[0];
 }
 
 function withRowDefaults(seed: Partial<TemplateRow>): TemplateRow {
@@ -485,8 +590,14 @@ function withRowDefaults(seed: Partial<TemplateRow>): TemplateRow {
     task: seed.task ?? '',
     levelId: level?.id || '',
     levelLabel,
-    instructions: seed.instructions ?? level?.instructions ?? '',
-    acknowledgement: seed.acknowledgement ?? level?.acknowledgement ?? '',
+    instructions:
+      hasNonEmptyText(seed.instructions) || !level
+        ? seed.instructions ?? ''
+        : readLevelInstructions(level),
+    acknowledgement:
+      hasNonEmptyText(seed.acknowledgement) || !level
+        ? seed.acknowledgement ?? ''
+        : readLevelAcknowledgement(level),
     examples: seed.examples ?? '',
     aiGeneratedContent: seed.aiGeneratedContent ?? legacy.additionalNotes ?? '',
     toolsUsed: seed.toolsUsed ?? '',
@@ -504,21 +615,192 @@ async function saveTemplate(publish: boolean) {
     ElMessage.warning('Please add at least one declaration row.');
     return;
   }
-  await dataStore.saveTemplate(assignment.value.id, {
+  const targetAssignmentId = asString(assignment.value.id);
+  if (!targetAssignmentId) {
+    ElMessage.error('Assignment information is incomplete.');
+    return;
+  }
+  await dataStore.saveTemplate(targetAssignmentId, {
     rows: editableRows.value,
     updatedBy: userStore.userInfo.name,
     publish,
   });
   ElMessage.success(publish ? 'Template published.' : 'Draft saved.');
   if (publish) {
-    router.replace({ name: 'TemplateEditor', params: { assignmentId: assignment.value.id } });
+    router.replace({ name: 'TemplateEditor', params: { assignmentId: targetAssignmentId } });
   }
 }
 
-function exportTemplate(format: 'pdf' | 'xlsx') {
-  if (!editableRows.value.length) return;
-  const label = format === 'pdf' ? 'PDF' : 'Excel';
-  ElMessage.info(`Generating ${label} export (demo only).`);
+type ExportFormat = 'pdf' | 'xlsx';
+
+interface ExportColumn {
+  label: string;
+  pick(row: TemplateRow, index: number): string;
+}
+
+interface ExportRequestPayload {
+  title: string;
+  data: Record<string, string[]>;
+}
+
+function buildExportFilename(extension: ExportFormat, timestamp: Date) {
+  const rawAssignmentName = assignment.value?.name ?? 'template';
+  const safeAssignmentName = rawAssignmentName
+    .normalize('NFKC')
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, '_');
+  const fileDate = timestamp.toISOString().slice(0, 10);
+  return `ai_template_${safeAssignmentName}_${fileDate}.${extension}`;
+}
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function buildExportTitle() {
+  const titleParts = ['AI Use Declaration Template'];
+  if (assignment.value?.name) {
+    titleParts.push(assignment.value.name);
+  }
+  if (courseLabel.value) {
+    titleParts.push(courseLabel.value);
+  }
+  return titleParts.join(' - ').slice(0, 200);
+}
+
+function exportColumns(): ExportColumn[] {
+  return [
+    {
+      label: 'Index',
+      pick(_row, index) {
+        return String(index + 1);
+      },
+    },
+    {
+      label: 'Task',
+      pick(row) {
+        return row.task ?? '';
+      },
+    },
+    {
+      label: 'Scale Level',
+      pick(row) {
+        return row.levelLabel ?? '';
+      },
+    },
+    {
+      label: 'Instructions',
+      pick(row) {
+        return row.instructions ?? '';
+      },
+    },
+    {
+      label: 'Examples',
+      pick(row) {
+        return row.examples ?? '';
+      },
+    },
+    {
+      label: 'AI Generated Content',
+      pick(row) {
+        return row.aiGeneratedContent ?? '';
+      },
+    },
+    {
+      label: 'Acknowledgement',
+      pick(row) {
+        return row.acknowledgement ?? '';
+      },
+    },
+    {
+      label: 'Tools Used',
+      pick(row) {
+        return row.toolsUsed ?? '';
+      },
+    },
+    {
+      label: 'Purpose & Usage',
+      pick(row) {
+        return row.purposeAndUsage ?? '';
+      },
+    },
+    {
+      label: 'Key Prompts',
+      pick(row) {
+        return row.keyPrompts ?? '';
+      },
+    },
+  ];
+}
+
+function buildExportRequestPayload(): ExportRequestPayload | null {
+  const currentAssignment = assignment.value;
+  if (!currentAssignment) return null;
+  const columns = exportColumns();
+  const rows = editableRows.value;
+
+  const dataEntries = columns.map(({ label, pick }) => {
+    const values = rows.map((row, index) => pick(row, index));
+    return [label, values] as const;
+  });
+
+  return {
+    title: buildExportTitle(),
+    data: Object.fromEntries(dataEntries),
+  };
+}
+
+async function exportTemplate(format: ExportFormat) {
+  if (!editableRows.value.length) {
+    ElMessage.warning('Please add at least one declaration row.');
+    return;
+  }
+  if (!assignment.value) {
+    ElMessage.error('Assignment information is missing.');
+    return;
+  }
+  if (isExporting.value) {
+    return;
+  }
+
+  const now = new Date();
+  const payload = buildExportRequestPayload();
+  if (!payload) {
+    ElMessage.error('Unable to prepare export payload.');
+    return;
+  }
+
+  const endpoint = format === 'pdf' ? '/export/pdf/' : '/export/excel/';
+  const successMessage =
+    format === 'pdf'
+      ? 'PDF export ready for download.'
+      : 'Excel export ready for download.';
+  const errorMessage =
+    format === 'pdf'
+      ? 'Failed to generate PDF export.'
+      : 'Failed to generate Excel export.';
+
+  try {
+    isExporting.value = true;
+    const blob = await http.post<Blob>(endpoint, payload, {
+      responseType: 'blob',
+    });
+    const filename = buildExportFilename(format, now);
+    triggerDownload(blob, filename);
+    ElMessage.success(successMessage);
+  } catch (error) {
+    console.error(`Failed to export template ${format}:`, error);
+    ElMessage.error(errorMessage);
+  } finally {
+    isExporting.value = false;
+  }
 }
 
 function generateRowId() {
@@ -533,9 +815,17 @@ function generateRowId() {
 .filters { padding: 12px 16px; }
 .filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .filter-item { width: 280px; }
+.filter-empty { padding: 4px 0; color: #909399; font-size: 14px; }
 .panel { display: flex; flex-direction: column; gap: 16px; }
 .label { color: #606266; font-size: 13px; margin-right: 4px; }
 .table-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .legend { font-size: 13px; color: #606266; display: flex; gap: 8px; align-items: center; }
 .mt-6 { margin-top: 6px; }
+.readonly-area :deep(.el-textarea__inner) {
+  background-color: #f5f7fa;
+  color: #606266;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: default;
+}
 </style>

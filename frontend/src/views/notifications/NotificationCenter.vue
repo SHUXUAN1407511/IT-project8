@@ -88,7 +88,7 @@ function navigate(notice: NotificationItem) {
   if (notice.relatedType === 'scale') {
     router.push({ path: '/scales' });
   } else if (notice.relatedType === 'assignment' && notice.relatedId) {
-    router.push({ name: 'TemplateEditor', params: { assignmentId: notice.relatedId } });
+    router.push({ name: 'TemplateEditor', params: { assignmentId: String(notice.relatedId) } });
   } else if (notice.relatedType === 'course') {
     router.push({ path: '/courses' });
   }

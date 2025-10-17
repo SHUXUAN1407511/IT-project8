@@ -55,19 +55,22 @@ const userStore = useUserStore();
 const dataStore = useDataStore();
 const coursesArr = computed(() => Array.isArray(dataStore.courses) ? dataStore.courses : []);
 const assignmentsArr = computed(() => Array.isArray(dataStore.assignments) ? dataStore.assignments : []);
+const normalizeId = (value: unknown) => (value === undefined || value === null ? '' : String(value));
 
 onMounted(async () => {
   await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchAssignments()]);
 });
 
 const myCourses = computed(() =>
-  coursesArr.value.filter((course) => course.scId === userStore.userInfo?.id)
+  coursesArr.value.filter((course) => normalizeId(course.scId) === normalizeId(userStore.userInfo?.id))
 );
 
 const termCount = computed(() => new Set(myCourses.value.map((course) => course.term)).size);
 
 const myAssignments = computed(() =>
-  assignmentsArr.value.filter((assignment) => myCourses.value.some((course) => course.id === assignment.courseId))
+  assignmentsArr.value.filter((assignment) =>
+    myCourses.value.some((course) => normalizeId(course.id) === normalizeId(assignment.courseId))
+  )
 );
 
 const draftTemplates = computed(() =>
@@ -75,12 +78,14 @@ const draftTemplates = computed(() =>
     .filter((assignment) => assignment.aiDeclarationStatus !== 'published')
     .map((assignment) => ({
       assignment,
-      course: myCourses.value.find((course) => course.id === assignment.courseId)!,
+      course: myCourses.value.find(
+        (course) => normalizeId(course.id) === normalizeId(assignment.courseId)
+      )!,
     }))
 );
 
-function toTemplate(assignmentId: string) {
-  router.push({ name: 'TemplateEditor', params: { assignmentId } });
+function toTemplate(assignmentId: string | number) {
+  router.push({ name: 'TemplateEditor', params: { assignmentId: String(assignmentId) } });
 }
 </script>
 

@@ -538,7 +538,7 @@ function confirmDelete(assignment: Assignment) {
 }
 
 function goToTemplate(assignment: Assignment) {
-  router.push({ name: 'TemplateEditor', params: { assignmentId: assignment.id } });
+  router.push({ name: 'TemplateEditor', params: { assignmentId: String(assignment.id) } });
 }
 
 function formatDate(value?: string) {
