@@ -85,12 +85,8 @@ WSGI_APPLICATION = 'itp8.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'dataforitp8',
-        'USER':'shuxuan1',
-        'PASSWORD':'Guardian1127',
-        'HOST':'127.0.0.1',
-        'PORT':'3306',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': 'db.sqlite3',
     }
 }
 
