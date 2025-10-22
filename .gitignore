@@ -1,4 +1,4 @@
-# macOS system files
+﻿# macOS system files
 .DS_Store
 
 # Node/Vite artifacts
@@ -6,6 +6,11 @@ node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+
+# Playwright test artifacts
+playwright-report/
+test-results/
+*.png
 
 # Environment files
 *.local
