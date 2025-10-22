@@ -1,0 +1,28 @@
+﻿name: CI Tests
+
+on:
+  push:
+    branches: [ main, backend ]
+  pull_request:
+    branches: [ main, backend ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install django djangorestframework django-cors-headers
+
+    - name: Run Django tests
+      run: |
+        python manage.py test --verbosity=2
