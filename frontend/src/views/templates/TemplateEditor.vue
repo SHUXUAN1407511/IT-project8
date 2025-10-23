@@ -52,7 +52,7 @@
           <el-option
             v-for="scale in scaleOptions"
             :key="scale.id"
-            :label="scale.name"
+            :label="scaleDisplayName(scale)"
             :value="scale.id"
           />
         </el-select>
@@ -209,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
@@ -326,6 +326,31 @@ const assignment = computed<Assignment | undefined>(() => {
   return dataStore.assignments.find((item) => asString(item.id) === targetId);
 });
 
+const coordinatorOwnerIds = computed(() => {
+  const ids = new Set<string>();
+  const currentAssignment = assignment.value;
+  if (!currentAssignment) {
+    return [];
+  }
+  const courseId = asString(currentAssignment.courseId);
+  const course = dataStore.courses.find((c) => asString(c.id) === courseId);
+  if (!course) {
+    return [];
+  }
+
+  const courseScId = asString(course.scId);
+  if (courseScId) {
+    ids.add(courseScId);
+  }
+
+  const scUser = dataStore.users.find((user) => asString(user.id) === courseScId);
+  if (scUser?.username) {
+    ids.add(scUser.username);
+  }
+
+  return Array.from(ids).filter((value): value is string => typeof value === 'string' && value.length > 0);
+});
+
 const courseLabel = computed(() => {
   if (!assignment.value) return '';
   const courseId = asString(assignment.value.courseId);
@@ -340,26 +365,69 @@ const templateRecord = computed(() =>
   dataStore.templateByAssignment(selectedAssignmentId.value)
 );
 
+const templateFingerprint = computed(() => rowsFingerprint(templateRecord.value?.rows));
+const editableFingerprint = computed(() => rowsFingerprint(editableRows.value));
+const hasLocalChanges = computed(() => editableFingerprint.value !== templateFingerprint.value);
+
 const scaleOptions = computed<ScaleRecord[]>(() => {
   const options: ScaleRecord[] = [];
   const defaultScale = dataStore.defaultScale;
   if (defaultScale) {
     options.push(defaultScale);
   }
+
+  const userId = asString(userStore.userInfo?.id);
+  const username = userStore.userInfo?.username || '';
+  const ownerCandidates = new Set<string>();
+  if (userId) ownerCandidates.add(userId);
+  if (username) ownerCandidates.add(username);
+  coordinatorOwnerIds.value.forEach((id) => ownerCandidates.add(id));
+
   dataStore.customScales.forEach((scale) => {
-    const isOwner = scale.ownerId === userStore.userInfo?.id;
-    if (scale.isPublic || isOwner || userStore.role === 'admin') {
+    const ownerId = asString(scale.ownerId);
+    const ownerMatches = ownerCandidates.has(ownerId);
+    const canUse = scale.isPublic || ownerMatches || userStore.role === 'admin';
+    if (canUse) {
       options.push(scale);
     }
   });
+
   return options;
 });
 
+const scaleDisplayName = (scale: ScaleRecord) => {
+  const ownerId = asString(scale.ownerId);
+  const isCoordinatorOwner =
+    scale.ownerType === 'sc' && coordinatorOwnerIds.value.includes(ownerId);
+  if (isCoordinatorOwner) {
+    return 'sc-default scale';
+  }
+  return scale.name;
+};
+
 const selectedScaleId = ref('');
+const persistedScaleId = ref('');
+const isHydrating = ref(false);
 
 const sameId = (a: unknown, b: unknown) => asString(a) === asString(b);
 const hasNonEmptyText = (value: unknown) =>
   typeof value === 'string' ? value.trim().length > 0 : !!value;
+
+const fingerprintRow = (row: TemplateRow) => ({
+  id: row.id,
+  task: row.task ?? '',
+  levelId: row.levelId ?? '',
+  instructions: row.instructions ?? '',
+  acknowledgement: row.acknowledgement ?? '',
+  examples: row.examples ?? '',
+  aiGeneratedContent: row.aiGeneratedContent ?? '',
+  toolsUsed: row.toolsUsed ?? '',
+  purposeAndUsage: row.purposeAndUsage ?? '',
+  keyPrompts: row.keyPrompts ?? '',
+});
+
+const rowsFingerprint = (rows: TemplateRow[] | undefined | null) =>
+  JSON.stringify((rows || []).map((row) => fingerprintRow(row)));
 
 function readLevelInstructions(level: Partial<TemplateRow> | ScaleLevel | undefined | null) {
   if (!level) return '';
@@ -401,15 +469,129 @@ function findScaleById(id: string) {
   return scaleOptions.value.find((scale) => sameId(scale.id, id));
 }
 
-function findScaleContainingLevel(levelId: string) {
-  return scaleOptions.value.find((scale) =>
+function findScaleContainingLevel(levelId: string, source?: ScaleRecord[]) {
+  const candidates = source ?? scaleOptions.value;
+  return candidates.find((scale) =>
     scale.currentVersion?.levels?.some((level) => sameId(level.id, levelId)),
   );
+}
+
+function scaleLevelIds(scale?: ScaleRecord | null) {
+  return new Set((scale?.currentVersion?.levels || []).map((level) => level.id));
+}
+
+function isScaleCompatibleWithRows(
+  scaleId: string | null | undefined,
+  rows: TemplateRow[] | undefined | null,
+) {
+  if (!scaleId || !rows) return false;
+  const scale = findScaleById(scaleId);
+  if (!scale) return false;
+  const ids = scaleLevelIds(scale);
+  if (!ids.size) return false;
+  return rows.every((row) => !row.levelId || ids.has(row.levelId));
+}
+
+function inferScaleIdForRows(rows: TemplateRow[] | undefined | null) {
+  const dataset = Array.isArray(rows) ? rows : editableRows.value;
+  const persisted = persistedScaleId.value;
+  const persistedValid = persisted && findScaleById(persisted) ? persisted : '';
+  const current = selectedScaleId.value;
+  const currentValid = current && findScaleById(current) ? current : '';
+
+  if (!Array.isArray(dataset) || !dataset.length) {
+    return (
+      persistedValid ||
+      currentValid ||
+      scaleOptions.value[0]?.id ||
+      ''
+    );
+  }
+
+  const candidates: string[] = [];
+  if (persistedValid) {
+    candidates.push(persistedValid);
+  }
+  if (currentValid && currentValid !== persistedValid) {
+    candidates.push(currentValid);
+  }
+  scaleOptions.value.forEach((scale) => {
+    if (!candidates.includes(scale.id)) {
+      candidates.push(scale.id);
+    }
+  });
+
+  for (const candidate of candidates) {
+    if (isScaleCompatibleWithRows(candidate, dataset)) {
+      return candidate;
+    }
+  }
+
+  const partial = scaleOptions.value.find((scale) => {
+    const ids = scaleLevelIds(scale);
+    return dataset.some((row) => row.levelId && ids.has(row.levelId));
+  });
+  return partial?.id || candidates[0] || '';
 }
 
 const levelOptions = computed(
   () => findScaleById(selectedScaleId.value)?.currentVersion?.levels || [],
 );
+
+const canEdit = computed(() => {
+  if (!assignment.value) return false;
+  if (!userStore.isAuthenticated) return false;
+  if (userStore.role === 'admin') return true;
+  if (userStore.role === 'sc') {
+    const course = dataStore.courses.find(
+      (c) => asString(c.id) === asString(assignment.value?.courseId)
+    );
+    return course?.scId === asString(userStore.userInfo?.id);
+  }
+  if (userStore.role === 'tutor') {
+    const tutorId = asString(userStore.userInfo?.id);
+    return Array.isArray(assignment.value.tutorIds)
+      ? assignment.value.tutorIds.map((value) => asString(value)).includes(tutorId)
+      : false;
+  }
+  return false;
+});
+
+const AUTO_REFRESH_INTERVAL = 15000;
+let templateSyncTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopTemplateSync() {
+  if (templateSyncTimer) {
+    clearInterval(templateSyncTimer);
+    templateSyncTimer = null;
+  }
+}
+
+async function triggerTemplateRefresh() {
+  const assignmentId = selectedAssignmentId.value;
+  if (!assignmentId || hasLocalChanges.value) {
+    return;
+  }
+  try {
+    const latest = await dataStore.refreshTemplate(assignmentId);
+    const incomingFingerprint = rowsFingerprint(latest?.rows);
+    if (incomingFingerprint !== templateFingerprint.value) {
+      // templateRecord watcher will rehydrate rows when store updates
+      return;
+    }
+  } catch (error) {
+    console.warn('[TemplateEditor] Failed to refresh template:', error);
+  }
+}
+
+function startTemplateSync() {
+  if (templateSyncTimer || !selectedAssignmentId.value) {
+    return;
+  }
+  templateSyncTimer = setInterval(() => {
+    void triggerTemplateRefresh();
+  }, AUTO_REFRESH_INTERVAL);
+}
 
 watch(
   () => route.params.assignmentId,
@@ -439,44 +621,80 @@ watch(selectedAssignmentId, (id) => {
 watch(scaleOptions, (options) => {
   if (!options.length) {
     selectedScaleId.value = '';
+    persistedScaleId.value = '';
     return;
   }
+
+  const rows = templateRecord.value?.rows || editableRows.value;
+  const inferred = inferScaleIdForRows(rows as TemplateRow[]);
+
+  if (inferred) {
+    if (inferred !== selectedScaleId.value) {
+      isHydrating.value = true;
+      selectedScaleId.value = inferred;
+      isHydrating.value = false;
+    }
+    persistedScaleId.value = inferred;
+    return;
+  }
+
   if (!selectedScaleId.value || !findScaleById(selectedScaleId.value)) {
-    selectedScaleId.value = options[0].id;
+    const fallback = options[0]?.id;
+    if (fallback) {
+      isHydrating.value = true;
+      selectedScaleId.value = fallback;
+      isHydrating.value = false;
+      persistedScaleId.value = fallback;
+    }
   }
 });
 
-watch(selectedScaleId, () => {
-  syncRowsWithScale();
-});
+watch(
+  selectedScaleId,
+  (newVal, oldVal) => {
+    const allowFallback = !isHydrating.value && !!oldVal && newVal !== oldVal;
+    if (newVal && findScaleById(newVal)) {
+      persistedScaleId.value = newVal;
+    } else if (!newVal) {
+      persistedScaleId.value = '';
+    }
+    syncRowsWithScale({ allowFallback });
+  }
+);
 
 watch(
   levelOptions,
   () => {
-    syncRowsWithScale();
+    syncRowsWithScale({ allowFallback: false });
   },
   { deep: true }
 );
 
 function hydrateTemplate() {
+  isHydrating.value = true;
   if (!assignment.value) {
     editableRows.value = [];
+    isHydrating.value = false;
     return;
   }
   const record = templateRecord.value;
+  const candidateScaleId = inferScaleIdForRows(record?.rows || []);
+  if (candidateScaleId) {
+    selectedScaleId.value = candidateScaleId;
+    persistedScaleId.value = candidateScaleId;
+  } else if (!selectedScaleId.value && scaleOptions.value.length) {
+    selectedScaleId.value = scaleOptions.value[0].id;
+    persistedScaleId.value = scaleOptions.value[0].id;
+  }
+
   if (record) {
     editableRows.value = record.rows.map((row) => withRowDefaults(row));
-    const matchedScale = record.rows
-      .map((row) => findScaleContainingLevel(row.levelId))
-      .find((scale): scale is ScaleRecord => !!scale);
-    if (matchedScale) {
-      selectedScaleId.value = matchedScale.id;
-    }
   } else {
-    selectedScaleId.value = scaleOptions.value[0]?.id || '';
     editableRows.value = [];
   }
-  syncRowsWithScale();
+
+  isHydrating.value = false;
+  syncRowsWithScale({ allowFallback: false });
 }
 
 onMounted(async () => {
@@ -494,35 +712,45 @@ onMounted(async () => {
 });
 
 watch(templateRecord, (record) => {
+  isHydrating.value = true;
+  const rows = record?.rows || [];
+  const targetScaleId = inferScaleIdForRows(rows as TemplateRow[]);
+  if (targetScaleId) {
+    selectedScaleId.value = targetScaleId;
+    persistedScaleId.value = targetScaleId;
+  } else if (!selectedScaleId.value && scaleOptions.value.length) {
+    const fallback = scaleOptions.value[0].id;
+    selectedScaleId.value = fallback;
+    persistedScaleId.value = fallback;
+  }
+
   if (record) {
     editableRows.value = record.rows.map((row) => withRowDefaults(row));
   } else {
     editableRows.value = [];
   }
-  syncRowsWithScale();
+
+  isHydrating.value = false;
+  syncRowsWithScale({ allowFallback: false });
 });
 
-const canEdit = computed(() => {
-  if (!assignment.value) return false;
-  if (!userStore.isAuthenticated) return false;
-  if (userStore.role === 'admin') return true;
-  if (userStore.role === 'sc') {
-    const course = dataStore.courses.find(
-      (c) => asString(c.id) === asString(assignment.value?.courseId)
-    );
-    return course?.scId === asString(userStore.userInfo?.id);
-  }
-  if (userStore.role === 'tutor') {
-    const tutorId = asString(userStore.userInfo?.id);
-    return Array.isArray(assignment.value.tutorIds)
-      ? assignment.value.tutorIds.map((value) => asString(value)).includes(tutorId)
-      : false;
-  }
-  return false;
+watch(
+  [selectedAssignmentId, canEdit],
+  ([assignmentId, editable]) => {
+    stopTemplateSync();
+    if (assignmentId && editable) {
+      startTemplateSync();
+    }
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  stopTemplateSync();
 });
 
 function addRow() {
-  const defaultLevel = levelOptions.value[0];
+  const defaultLevel = findLevel(undefined, { allowFallback: true });
   if (!defaultLevel) {
     ElMessage.warning('The selected scale has no available levels yet.');
     return;
@@ -550,24 +778,30 @@ function moveRow(index: number, step: number) {
 }
 
 function onLevelChange(row: TemplateRow, levelId: string) {
-  const level = findLevel(levelId);
+  const level = findLevel(levelId, { allowFallback: true });
   if (!level) return;
   row.levelLabel = level.label;
   row.instructions = readLevelInstructions(level);
   row.acknowledgement = readLevelAcknowledgement(level);
 }
 
-function syncRowsWithScale() {
+type SyncOptions = { allowFallback?: boolean };
+
+function syncRowsWithScale(options: SyncOptions = {}) {
+  const allowFallback = !!options.allowFallback;
   if (!levelOptions.value.length || !editableRows.value.length) return;
   editableRows.value.forEach((row) => {
-    const match = findLevel(row.levelId);
+    const match = findLevel(row.levelId, { allowFallback: false });
     if (match) {
       row.levelLabel = match.label;
       row.instructions = readLevelInstructions(match);
       row.acknowledgement = readLevelAcknowledgement(match);
       return;
     }
-    const fallback = levelOptions.value[0];
+    if (!allowFallback) {
+      return;
+    }
+    const fallback = findLevel(undefined, { allowFallback: true });
     if (!fallback) return;
     row.levelId = fallback.id;
     row.levelLabel = fallback.label;
@@ -576,19 +810,28 @@ function syncRowsWithScale() {
   });
 }
 
-function findLevel(levelId?: string) {
-  if (!levelId) return levelOptions.value[0];
-  return levelOptions.value.find((item) => sameId(item.id, levelId)) || levelOptions.value[0];
+type FindLevelOptions = { allowFallback?: boolean };
+
+function findLevel(levelId?: string, options: FindLevelOptions = {}) {
+  const allowFallback = options.allowFallback !== false;
+  if (!levelId) {
+    return allowFallback ? levelOptions.value[0] : undefined;
+  }
+  const match = levelOptions.value.find((item) => sameId(item.id, levelId));
+  if (match) {
+    return match;
+  }
+  return allowFallback ? levelOptions.value[0] : undefined;
 }
 
 function withRowDefaults(seed: Partial<TemplateRow>): TemplateRow {
-  const level = findLevel(seed.levelId);
+  const level = findLevel(seed.levelId, { allowFallback: false });
   const levelLabel = level?.label ?? seed.levelLabel ?? '';
   const legacy = seed as TemplateRow & { additionalNotes?: string };
   return {
     id: seed.id || generateRowId(),
     task: seed.task ?? '',
-    levelId: level?.id || '',
+    levelId: level?.id || (seed.levelId ?? ''),
     levelLabel,
     instructions:
       hasNonEmptyText(seed.instructions) || !level

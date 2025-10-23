@@ -4,16 +4,16 @@
       <div>
         <h2>AI Use Scale Management</h2>
       </div>
-      <el-space :size="8">
+      <el-space v-if="isAdmin" :size="8">
         <el-button
           type="primary"
           plain
           :disabled="!canEditDefault"
-          @click="openLevelDialog(null)"
+          @click="openLevelDialog('default', null)"
         >
           Add level
         </el-button>
-        <el-button type="primary" :disabled="!canEditDefault" @click="saveDefaultScale">
+        <el-button type="primary" :disabled="!canEditDefault" @click="saveScale('default')">
           Save new version
         </el-button>
       </el-space>
@@ -73,12 +73,18 @@
             </el-table-column>
             <el-table-column label="Actions" width="140" fixed="right">
               <template #default="{ row, $index }">
-                <el-button link :disabled="!canEditDefault" @click="openLevelDialog(row)">Edit</el-button>
+                <el-button
+                  link
+                  :disabled="!canEditDefault"
+                  @click="openLevelDialog('default', row)"
+                >
+                  Edit
+                </el-button>
                 <el-button
                   link
                   type="danger"
                   :disabled="!canEditDefault"
-                  @click="removeLevel($index)"
+                  @click="removeLevel('default', $index)"
                 >
                   Remove
                 </el-button>
@@ -94,25 +100,144 @@
           <div class="panel-header">
             <h3>Version history</h3>
           </div>
-          <el-timeline>
-            <el-timeline-item
-              v-for="version in defaultScale?.history || []"
-              :key="version.id"
-              :timestamp="formatDate(version.updatedAt)"
-            >
-              <div class="version-item">
-                <div>
-                  <strong>v{{ version.version }}</strong>
-                  <span class="muted"> · {{ version.updatedBy }}</span>
-                  <p class="muted">{{ version.notes || 'No notes' }}</p>
+          <div class="history-scroll">
+            <el-timeline>
+              <el-timeline-item
+                v-for="version in defaultScale?.history || []"
+                :key="version.id"
+                :timestamp="formatDate(version.updatedAt)"
+              >
+                <div class="version-item">
+                  <div>
+                    <strong>v{{ version.version }}</strong>
+                    <span class="muted"> · {{ version.updatedBy }}</span>
+                    <p class="muted">{{ version.notes || 'No notes' }}</p>
+                  </div>
+                  <el-button
+                    size="small"
+                    :disabled="!(isAdmin || isSc)"
+                    @click="cloneVersion(version, isAdmin ? 'default' : 'personal')"
+                  >
+                    Clone this version
+                  </el-button>
                 </div>
-                <el-button size="small" :disabled="!canEditDefault" @click="rollbackScale(version)">
-                  Clone this version
-                </el-button>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
+              </el-timeline-item>
+            </el-timeline>
+          </div>
           <div v-if="!(defaultScale?.history?.length)" class="empty-message">No history yet</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row v-if="isSc" :gutter="16" class="content">
+      <el-col :span="24" :lg="16">
+        <el-card shadow="never" class="panel">
+          <div class="panel-header">
+            <h3>My scale levels</h3>
+            <div class="panel-meta">
+              <div>Last updated {{ formatDate(personalScale?.currentVersion?.updatedAt) }}</div>
+              <div>By {{ personalScale?.currentVersion?.updatedBy || '—' }}</div>
+            </div>
+          </div>
+          <el-space :size="8">
+            <el-button type="primary" plain @click="openLevelDialog('personal', null)">
+              Add level
+            </el-button>
+            <el-button type="primary" @click="saveScale('personal')">
+              Save new version
+            </el-button>
+          </el-space>
+
+          <el-table
+            v-if="personalLevels.length"
+            :data="personalLevels"
+            border
+            size="small"
+            empty-text="No levels"
+            class="mt-12"
+          >
+            <el-table-column label="Level" width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="cell-text" :title="row.label || '—'">
+                  {{ row.label || '—' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="AI Assessment Scale" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="cell-text" :title="row.title || '—'">
+                  {{ row.title || '—' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Instructions to Students" min-width="240">
+              <template #default="{ row }">
+                <span
+                  :class="['cell-text', { muted: !row.instructions } ]"
+                  :title="row.instructions || '—'"
+                >
+                  {{ row.instructions || '—' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="AI Acknowledgement" min-width="240">
+              <template #default="{ row }">
+                <span
+                  :class="['cell-text', { muted: !row.acknowledgement } ]"
+                  :title="row.acknowledgement || '—'"
+                >
+                  {{ row.acknowledgement || '—' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Actions" width="140" fixed="right">
+              <template #default="{ row, $index }">
+                <el-button link @click="openLevelDialog('personal', row)">Edit</el-button>
+                <el-button link type="danger" @click="removeLevel('personal', $index)">
+                  Remove
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-else class="empty-message">
+            <template v-if="personalScale">
+              No levels configured. Click “Add level” to create your version.
+            </template>
+            <template v-else>
+              You do not have a personalised scale yet. Modify the default levels and save to create one.
+            </template>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="24" :lg="8">
+        <el-card shadow="never" class="panel history-card">
+          <div class="panel-header">
+            <h3>My version history</h3>
+          </div>
+          <div class="history-scroll">
+            <el-timeline>
+              <el-timeline-item
+                v-for="version in personalScale?.history || []"
+                :key="version.id"
+                :timestamp="formatDate(version.updatedAt)"
+              >
+                <div class="version-item">
+                  <div>
+                    <strong>v{{ version.version }}</strong>
+                    <span class="muted"> · {{ version.updatedBy }}</span>
+                    <p class="muted">{{ version.notes || 'No notes' }}</p>
+                  </div>
+                  <el-button size="small" @click="cloneVersion(version, 'personal')">
+                    Use this version
+                  </el-button>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
+          </div>
+          <div v-if="!(personalScale?.history?.length)" class="empty-message">
+            No personal history yet
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -150,15 +275,53 @@ import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { useDataStore, type ScaleLevel, type ScaleVersion } from '@/store/data';
 
+type ScaleScope = 'default' | 'personal';
+
 const dataStore = useDataStore();
 const userStore = useUserStore();
 
 onMounted(async () => {
   await dataStore.fetchScales();
 });
+
+const normalizedRole = computed(() => {
+  const candidates = [
+    userStore.userInfo?.role,
+    userStore.role,
+  ];
+  for (const role of candidates) {
+    if (role) {
+      return String(role).trim().toLowerCase();
+    }
+  }
+  return '';
+});
+
+const isAdmin = computed(() => normalizedRole.value === 'admin');
+const isSc = computed(() => normalizedRole.value === 'sc');
 const defaultScale = computed(() => dataStore.defaultScale);
+const personalScale = computed(() => {
+  if (!isSc.value) return null;
+  const candidates = new Set<string>();
+  const username = userStore.userInfo?.username;
+  const userId = userStore.userInfo?.id;
+  if (username) candidates.add(String(username).trim());
+  if (userId) candidates.add(String(userId).trim());
+  if (!candidates.size) return null;
+
+  return (
+    dataStore.customScales.find((scale) => {
+      const ownerId = String(scale.ownerId ?? '').trim();
+      return ownerId && candidates.has(ownerId);
+    }) || null
+  );
+});
+
 const defaultLevels = ref<ScaleLevel[]>(
   (defaultScale.value?.currentVersion?.levels || []).map((level) => normalizeLevel(level)),
+);
+const personalLevels = ref<ScaleLevel[]>(
+  (personalScale.value?.currentVersion?.levels || []).map((level) => normalizeLevel(level)),
 );
 
 watch(defaultScale, (scale) => {
@@ -170,7 +333,17 @@ watch(defaultScale, (scale) => {
   }
 });
 
-const canEditDefault = computed(() => userStore.role === 'admin' || userStore.role === 'sc');
+watch(personalScale, (scale) => {
+  const levels = scale?.currentVersion?.levels;
+  if (levels) {
+    personalLevels.value = levels.map((level) => normalizeLevel(level));
+  } else {
+    personalLevels.value = [];
+  }
+});
+
+const canEditDefault = computed(() => isAdmin.value);
+const canEditPersonal = computed(() => isSc.value);
 
 function generateLevelId(seed: string) {
   const normalized = seed.trim().toLowerCase().replace(/\s+/g, '_') || 'level';
@@ -190,6 +363,7 @@ function normalizeLevel(seed: Partial<ScaleLevel> = {}): ScaleLevel {
 const levelDialog = reactive({
   visible: false,
   isEdit: false,
+  scope: 'default' as ScaleScope,
   form: {
     id: generateLevelId('level'),
     label: '',
@@ -199,24 +373,38 @@ const levelDialog = reactive({
   } as ScaleLevel,
 });
 
-function openLevelDialog(level: ScaleLevel | null) {
+function targetLevels(scope: ScaleScope) {
+  return scope === 'default' ? defaultLevels : personalLevels;
+}
+
+function openLevelDialog(scope: ScaleScope, level: ScaleLevel | null) {
   levelDialog.visible = true;
   levelDialog.isEdit = !!level;
+  levelDialog.scope = scope;
   levelDialog.form = normalizeLevel(level ? { ...level } : {});
 }
 
-function removeLevel(index: number) {
-  if (!canEditDefault.value) return;
-  defaultLevels.value.splice(index, 1);
+function removeLevel(scope: ScaleScope, index: number) {
+  if (scope === 'default' && !canEditDefault.value) return;
+  if (scope === 'personal' && !canEditPersonal.value) return;
+  const buffer = targetLevels(scope);
+  buffer.value.splice(index, 1);
 }
 
 function saveLevel() {
+  const scope = levelDialog.scope;
+  const editable = scope === 'default' ? canEditDefault.value : canEditPersonal.value;
+  if (!editable) return;
+
   const label = levelDialog.form.label.trim();
   if (!label) {
     ElMessage.error('Please enter a level key.');
     return;
   }
-  const duplicate = defaultLevels.value.some((item) => item.label === label && item.id !== levelDialog.form.id);
+  const buffer = targetLevels(scope);
+  const duplicate = buffer.value.some(
+    (item) => item.label === label && item.id !== levelDialog.form.id,
+  );
   if (duplicate) {
     ElMessage.error('Level key already exists.');
     return;
@@ -226,48 +414,75 @@ function saveLevel() {
     label,
     id: levelDialog.form.id || generateLevelId(label),
   });
-  const index = defaultLevels.value.findIndex((item) => item.id === entry.id);
+  const index = buffer.value.findIndex((item) => item.id === entry.id);
   if (levelDialog.isEdit && index >= 0) {
-    defaultLevels.value.splice(index, 1, entry);
+    buffer.value.splice(index, 1, entry);
   } else {
-    defaultLevels.value.push(entry);
+    buffer.value.push(entry);
   }
   levelDialog.visible = false;
 }
 
-async function saveDefaultScale() {
-  if (!canEditDefault.value) return;
-  const targetScaleId = defaultScale.value?.id || 'system_default';
+async function saveScale(scope: ScaleScope) {
+  if (scope === 'default') {
+    if (!canEditDefault.value) return;
+    const targetScaleId = defaultScale.value?.id || 'system_default';
+    await dataStore.saveScaleVersion(
+      {
+        scaleId: targetScaleId,
+        levels: defaultLevels.value,
+        updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
+        notes: 'Updated default scale',
+      },
+      {
+        ensureRecord: {
+          name: 'Default Scale',
+          ownerType: 'system',
+          ownerId: 'system',
+          isPublic: true,
+        },
+      },
+    );
+    ElMessage.success('Default scale saved as a new version.');
+    return;
+  }
+
+  if (!canEditPersonal.value) return;
+  const username = userStore.userInfo?.username || 'sc_user';
+  const displayName = userStore.userInfo?.name || username;
+  const targetScaleId = personalScale.value?.id || 'sc_personal';
   await dataStore.saveScaleVersion(
     {
       scaleId: targetScaleId,
-      levels: defaultLevels.value,
-      updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
-      notes: 'Updated default scale',
+      levels: personalLevels.value,
+      updatedBy: displayName,
+      notes: 'Updated personal scale',
     },
     {
       ensureRecord: {
-        name: 'Default Scale',
-        ownerType: 'system',
-        ownerId: 'system',
-        isPublic: true,
+        name: `${displayName}'s Scale`,
+        ownerType: 'sc',
+        ownerId: username,
+        isPublic: false,
       },
     },
   );
-  ElMessage.success('Default scale saved as a new version.');
+  ElMessage.success('Your personal scale has been saved.');
 }
 
-function rollbackScale(version: ScaleVersion) {
-  if (!canEditDefault.value) return;
-  const levels = version.levels?.length
-    ? version.levels.map((level) => normalizeLevel(level))
-    : [];
+function cloneVersion(version: ScaleVersion, scope: ScaleScope) {
+  const editable = scope === 'default' ? canEditDefault.value : canEditPersonal.value;
+  if (!editable) return;
+
+  const levels = (version.levels || []).map((level) => normalizeLevel(level));
   if (!levels.length) {
     ElMessage.warning('No levels found in the selected version.');
     return;
   }
-  defaultLevels.value = levels;
-  ElMessage.success(`Loaded v${version.version} into the editor. Save to create a new version.`);
+  const buffer = targetLevels(scope);
+  buffer.value = levels;
+  const label = scope === 'default' ? 'default' : 'personal';
+  ElMessage.success(`Loaded v${version.version} into the ${label} editor. Save to create a new version.`);
 }
 
 function formatDate(value?: string) {
@@ -291,7 +506,23 @@ function formatDate(value?: string) {
 .panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .panel-meta { font-size: 12px; color: #909399; text-align: right; display: flex; flex-direction: column; gap: 4px; }
 .history-card { min-height: 100%; }
+.history-scroll {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.history-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.history-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(144, 147, 153, 0.3);
+  border-radius: 999px;
+}
+.history-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(144, 147, 153, 0.6);
+}
 .version-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.mt-12 { margin-top: 12px; }
 .cell-text {
   display: inline-flex;
   align-items: center;
