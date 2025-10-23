@@ -1,8 +1,12 @@
+from uuid import UUID
+
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 
 from .models import AIUserScale, ScaleRecord, ScaleVersion, ScaleLevel
 from .serializer import (
@@ -10,6 +14,7 @@ from .serializer import (
     ScaleRecordSerializer,
     SaveScaleVersionRequestSerializer,
 )
+from usersystem.models import User
 
 
 # -------------------------
@@ -92,6 +97,18 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
             qs = qs.filter(owner_id=owner_id)
         if is_public in ("1", "true", "True"):
             qs = qs.filter(is_public=True)
+
+        acting_user = self._resolve_request_user(self.request)
+        if acting_user and getattr(acting_user, "role", None) == "sc":
+            owner_key = self._owner_key_for(acting_user)
+            if owner_type == ScaleRecord.OWNER_SC and not owner_id:
+                qs = qs.filter(owner_id=owner_key)
+            elif not owner_type and not owner_id:
+                qs = qs.filter(
+                    Q(owner_type=ScaleRecord.OWNER_SYSTEM)
+                    | Q(owner_type=ScaleRecord.OWNER_SC, owner_id=owner_key)
+                )
+
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -111,6 +128,161 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    def _resolve_request_user(self, request):
+        """
+        Try to resolve the business user making the request.
+        Mirrors the assignment viewset logic so that front-end hints keep working.
+        """
+        django_user = getattr(request, "user", None)
+        if getattr(django_user, "is_authenticated", False):
+            if hasattr(django_user, "role"):
+                return django_user
+            username = getattr(django_user, "username", None)
+            if username:
+                try:
+                    return User.objects.get(username=username)
+                except User.DoesNotExist:
+                    pass
+
+        candidate_ids = [
+            request.headers.get("X-User-Id"),
+            request.headers.get("X_USER_ID"),
+            request.headers.get("X-USER-ID"),
+            request.query_params.get("userId"),
+            getattr(request.data, "get", lambda _key, _default=None: _default)("userId"),
+        ]
+        for candidate in candidate_ids:
+            if not candidate:
+                continue
+            try:
+                return User.objects.get(pk=candidate)
+            except (User.DoesNotExist, ValueError, TypeError):
+                continue
+
+        candidate_usernames = [
+            request.headers.get("X-User-Username"),
+            request.headers.get("X-User-Name"),
+            request.headers.get("X_USER_NAME"),
+            request.headers.get("X-USERNAME"),
+            request.query_params.get("username"),
+            getattr(request.data, "get", lambda _key, _default=None: _default)("username"),
+        ]
+        for candidate in candidate_usernames:
+            if not candidate:
+                continue
+            try:
+                return User.objects.get(username=candidate)
+            except User.DoesNotExist:
+                continue
+
+        return None
+
+    def _owner_key_for(self, user):
+        username = getattr(user, "username", None)
+        if username:
+            return username
+        return str(getattr(user, "pk", ""))
+
+    def _resolve_record_by_alias(self, alias: str, acting_user):
+        normalized = (alias or "").strip().lower()
+        if not normalized:
+            return None
+
+        if normalized == "system_default":
+            return (
+                ScaleRecord.objects.filter(owner_type=ScaleRecord.OWNER_SYSTEM)
+                .order_by("-updated_at")
+                .first()
+            )
+
+        if (
+            normalized in {"sc_personal", "personal", "owner_default"}
+            and acting_user
+            and getattr(acting_user, "role", None) == "sc"
+        ):
+            owner_key = self._owner_key_for(acting_user)
+            return (
+                ScaleRecord.objects.filter(
+                    owner_type=ScaleRecord.OWNER_SC,
+                    owner_id=owner_key,
+                )
+                .order_by("-updated_at")
+                .first()
+            )
+
+        return None
+
+    def _assert_can_modify_record(self, record: ScaleRecord, user):
+        if not user:
+            return
+        role = getattr(user, "role", None)
+        if role == "admin":
+            return
+        if role == "sc":
+            owner_key = self._owner_key_for(user)
+            if record.owner_type == ScaleRecord.OWNER_SYSTEM:
+                raise PermissionDenied("SC users cannot modify the default scale.")
+            if record.owner_type == ScaleRecord.OWNER_SC and record.owner_id != owner_key:
+                raise PermissionDenied("You can only modify your own scale.")
+        else:
+            raise PermissionDenied("You do not have permission to modify this scale.")
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = self._resolve_request_user(request)
+        self._assert_can_modify_record(instance, user)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = self._resolve_request_user(request)
+        self._assert_can_modify_record(instance, user)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = self._resolve_request_user(request)
+        self._assert_can_modify_record(instance, user)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(methods=["get"], detail=False, url_path="sc-view")
+    def sc_view(self, request, *args, **kwargs):
+        """
+        Returns data grouped for SC dashboard usage:
+        - defaultRecords: all system-owned scales (admin maintained)
+        - personalRecord: the caller's private copy, if it exists
+        """
+        user = self._resolve_request_user(request)
+        if not user or getattr(user, "role", None) != "sc":
+            raise PermissionDenied("Only SC users can access this view.")
+
+        owner_key = self._owner_key_for(user)
+
+        default_qs = (
+            ScaleRecord.objects.filter(owner_type=ScaleRecord.OWNER_SYSTEM)
+            .prefetch_related("versions__levels")
+            .order_by("-updated_at")
+        )
+        personal = (
+            ScaleRecord.objects.filter(
+                owner_type=ScaleRecord.OWNER_SC,
+                owner_id=owner_key,
+            )
+            .prefetch_related("versions__levels")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        default_payload = ScaleRecordSerializer(default_qs, many=True).data
+        personal_payload = ScaleRecordSerializer(personal).data if personal else None
+
+        return Response(
+            {
+                "defaultRecords": default_payload,
+                "personalRecord": personal_payload,
+            }
+        )
 
     @action(methods=["post"], detail=False, url_path="save_version")
     def save_version(self, request, *args, **kwargs):
@@ -138,6 +310,33 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
             record = ScaleRecord.objects.get(pk=record_id)
         except ScaleRecord.DoesNotExist:
             return Response({"detail": "ScaleRecord not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        acting_user = self._resolve_request_user(request)
+        if not acting_user and updated_by and updated_by != "system":
+            try:
+                acting_user = User.objects.get(username=updated_by)
+            except User.DoesNotExist:
+                acting_user = None
+        if acting_user and not data.get("updatedBy"):
+            updated_by = getattr(acting_user, "username", updated_by)
+
+        record_owner = record.owner_type
+
+        if acting_user and getattr(acting_user, "role", None) == "sc":
+            owner_key = self._owner_key_for(acting_user)
+            if record_owner == ScaleRecord.OWNER_SYSTEM:
+                record, _created = ScaleRecord.objects.get_or_create(
+                    owner_type=ScaleRecord.OWNER_SC,
+                    owner_id=owner_key,
+                    defaults={
+                        "name": record.name,
+                        "is_public": False,
+                    },
+                )
+            elif record_owner == ScaleRecord.OWNER_SC and record.owner_id != owner_key:
+                raise PermissionDenied("You can only save versions of your own scale.")
+        elif acting_user and getattr(acting_user, "role", None) != "admin":
+            raise PermissionDenied("You do not have permission to modify this scale.")
 
         with transaction.atomic():
             last = record.versions.order_by("-version").first()
