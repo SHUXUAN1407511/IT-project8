@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # macOS system files
 .DS_Store
 
@@ -19,3 +20,18 @@ frontend/dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+=======
+.venv/
+venv/
+env/
+ENV/
+
+__pycache__/
+*.py[cod]
+
+db.sqlite3
+
+.DS_Store
+
+*.log
+>>>>>>> origin/backend

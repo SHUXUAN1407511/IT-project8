@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # IT-project8
 cd "/Users/hanzhang/Documents/学习/2025/第二学期/COMP30022/ass1/代码/IT-project8 19.34.34"
 python3 -m venv .venv
@@ -10,3 +11,6 @@ python manage.py runserver 0.0.0.0:8000
 cd "/Users/hanzhang/Documents/学习/2025/第二学期/COMP30022/ass1/代码/IT-project8-1 19.34.34/frontend"
 npm install
 npm run dev
+=======
+# IT-project8
+>>>>>>> origin/backend
