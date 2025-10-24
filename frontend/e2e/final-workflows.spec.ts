@@ -54,7 +54,6 @@ test.describe('Registration Without Role Selection', () => {
     await page.fill('input[placeholder="Create a password"]', 'Test123!');
     await page.fill('input[placeholder="Re-enter password"]', 'Test123!');
     
-    // 跳过角色选择，直接尝试注册
     const registerButton = page.locator('button:has-text("Register")');
     await registerButton.click();
     
@@ -66,14 +65,12 @@ test.describe('Registration Without Role Selection', () => {
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
-    // 只填写必填字段测试
     await page.fill('input[placeholder="Choose a username"]', 'simple_user');
     await page.fill('input[placeholder="Create a password"]', 'Simple123');
     await page.fill('input[placeholder="Re-enter password"]', 'Simple123');
     
     await page.screenshot({ path: 'simple-registration.png' });
     
-    // 检查是否有错误消息
     const errorMessages = await page.locator('.error-message, .el-message, .el-form-item__error').all();
     console.log('Error messages found:', errorMessages.length);
   });
@@ -111,7 +108,6 @@ test.describe('Basic Form Tests', () => {
       await page.waitForTimeout(2000);
       await page.screenshot({ path: `login-${user.username}.png` });
       
-      // 返回登录页面进行下一个测试
       await page.goto('http://localhost:5174');
       await page.waitForTimeout(1000);
     }
@@ -121,7 +117,6 @@ test.describe('Basic Form Tests', () => {
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
-    // 获取所有表单元素
     const allInputs = await page.locator('input').all();
     console.log('Total inputs on registration page:', allInputs.length);
     
@@ -135,7 +130,6 @@ test.describe('Basic Form Tests', () => {
       console.log(`Input ${i}: type=${type}, role=${role}, placeholder=${placeholder}, id=${id}`);
     }
     
-    // 尝试点击选择框的父元素
     const selectWrapper = page.locator('.el-select, [class*="select"]').first();
     if (await selectWrapper.count() > 0) {
       await selectWrapper.click();
@@ -143,7 +137,6 @@ test.describe('Basic Form Tests', () => {
       await page.screenshot({ path: 'select-clicked.png' });
     }
     
-    // 检查下拉选项是否出现
     const dropdownOptions = await page.locator('.el-select-dropdown__item, [class*="option"]').all();
     console.log('Dropdown options found:', dropdownOptions.length);
   });
