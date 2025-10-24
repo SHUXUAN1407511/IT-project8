@@ -1,13 +1,17 @@
 import type { App, DirectiveBinding } from 'vue';
-import { useUserStore } from '@/store/user';
+import { useUserStore } from '@/store/useUserStore';
 
 type Roles = 'admin' | 'sc' | 'tutor';
 type Checker = (ctx: { role?: Roles; isAuthenticated: boolean }) => boolean;
 type BindingVal = Roles | Roles[] | Checker;
 
 function check(val: BindingVal, role?: Roles, isAuthenticated?: boolean): boolean {
-  if (typeof val === 'function') return val({ role, isAuthenticated: !!isAuthenticated });
-  if (Array.isArray(val)) return !!role && val.includes(role);
+  if (typeof val === 'function') {
+    return val({ role, isAuthenticated: !!isAuthenticated });
+  }
+  if (Array.isArray(val)) {
+    return !!role && val.includes(role);
+  }
   return !!role && role === val;
 }
 

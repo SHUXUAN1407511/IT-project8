@@ -95,7 +95,7 @@
           width="160"
         >
           <template #default="{ row }">
-            {{ resolveCoordinator(row.scId)?.name || '—' }}
+            {{ resolveCoordinator(row.coordinatorId)?.name || '—' }}
           </template>
         </el-table-column>
         <el-table-column
@@ -154,25 +154,45 @@
         </el-form-item>
         <el-form-item label="Year / term" prop="term">
           <div class="term-selects">
-            <el-select v-model="courseYear" placeholder="Select year" class="term-item" style="width: 100%;">
-              <el-option v-for="year in yearOptions" :key="year" :label="year" :value="year" />
+            <el-select
+              v-model="courseYear"
+              placeholder="Select year"
+              class="term-item"
+              style="width: 100%;"
+            >
+              <el-option
+                v-for="year in yearOptions"
+                :key="year"
+                :label="year"
+                :value="year"
+              />
             </el-select>
-            <el-select v-model="courseSeason" placeholder="Select term" class="term-item" style="width: 100%;">
-              <el-option v-for="season in seasonOptions" :key="season" :label="season" :value="season" />
+            <el-select
+              v-model="courseSeason"
+              placeholder="Select term"
+              class="term-item"
+              style="width: 100%;"
+            >
+              <el-option
+                v-for="season in seasonOptions"
+                :key="season"
+                :label="season"
+                :value="season"
+              />
             </el-select>
           </div>
         </el-form-item>
-        <el-form-item label="Coordinator" prop="scId">
+        <el-form-item label="Coordinator" prop="coordinatorId">
           <el-select
-            v-model="courseForm.scId"
+            v-model="courseForm.coordinatorId"
             :disabled="!isAdmin"
             placeholder="Choose a coordinator"
           >
             <el-option
-              v-for="sc in coordinatorOptions"
-              :key="sc.id"
-              :value="sc.id"
-              :label="sc.name"
+              v-for="coordinator in coordinatorOptions"
+              :key="coordinator.id"
+              :value="coordinator.id"
+              :label="coordinator.name"
             />
           </el-select>
         </el-form-item>
@@ -197,20 +217,28 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { useUserStore } from '@/store/user';
-import { useDataStore, type Course } from '@/store/data';
+import { useUserStore } from '@/store/useUserStore';
+import { useDataStore, type Course } from '@/store/useDataStore';
 import { Search } from '@element-plus/icons-vue';
 
 const dataStore = useDataStore();
 const userStore = useUserStore();
-const coursesArr = computed(() => Array.isArray(dataStore.courses) ? dataStore.courses : []);
+const coursesArr = computed(() =>
+  Array.isArray(dataStore.courses) ? dataStore.courses : [],
+);
 
 
 
 const searchQuery = ref('');
 const termFilter = ref('');
 const coordinatorFilter = ref('');
-const sortState = ref<{ prop: keyof Course | ''; order: 'ascending' | 'descending' | null }>({ prop: '', order: null });
+const sortState = ref<{
+  prop: keyof Course | '';
+  order: 'ascending' | 'descending' | null;
+}>({
+  prop: '',
+  order: null,
+});
 
 const isAdmin = computed(() => userStore.role === 'admin');
 const currentUserCoordinatorKeys = computed(() => {
@@ -230,7 +258,9 @@ onMounted(async () => {
 
 const coordinatorOptions = computed(() => {
   const list = dataStore.coordinators;
-  if (list.length) return list;
+  if (list.length) {
+    return list;
+  }
   if (userStore.role === 'sc' && userStore.userInfo) {
     return [
       {
@@ -255,13 +285,17 @@ const termOptions = computed(() => {
 const filteredCourses = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return coursesArr.value.filter((course) => {
-    const matchesQuery = !query || course.name.toLowerCase().includes(query) || course.code.toLowerCase().includes(query);
+    const matchesQuery =
+      !query ||
+      course.name.toLowerCase().includes(query) ||
+      course.code.toLowerCase().includes(query);
     const matchesTerm = !termFilter.value || course.term === termFilter.value;
-    const matchesCoordinator = !coordinatorFilter.value || course.scId === coordinatorFilter.value;
+    const matchesCoordinator =
+      !coordinatorFilter.value || course.coordinatorId === coordinatorFilter.value;
     if (!isAdmin.value && userStore.userInfo?.id) {
       const matchesCurrentUser =
         currentUserCoordinatorKeys.value.length === 0 ||
-        currentUserCoordinatorKeys.value.includes(course.scId);
+        currentUserCoordinatorKeys.value.includes(course.coordinatorId);
       return matchesQuery && matchesTerm && matchesCurrentUser;
     }
     return matchesQuery && matchesTerm && matchesCoordinator;
@@ -277,7 +311,9 @@ const sortedCourses = computed(() => {
   return [...filteredCourses.value].sort((a, b) => {
     const av = (a as any)[prop];
     const bv = (b as any)[prop];
-    if (av === bv) return 0;
+    if (av === bv) {
+      return 0;
+    }
     return av > bv ? order : -order;
   });
 });
@@ -294,7 +330,7 @@ const courseForm = reactive({
   name: '',
   code: '',
   term: '',
-  scId: '',
+  coordinatorId: '',
   description: '',
 });
 
@@ -319,7 +355,7 @@ const courseRules: FormRules = {
   term: [
     { required: true, message: 'Please select the year and term.', trigger: 'change' },
   ],
-  scId: [
+  coordinatorId: [
     { required: true, message: 'Please choose a coordinator.', trigger: 'change' },
   ],
 };
@@ -331,15 +367,18 @@ function resetCourseForm() {
   courseForm.term = '';
   courseYear.value = String(currentYear);
   courseSeason.value = '';
-  courseForm.scId = isAdmin.value ? '' : userStore.userInfo?.id || '';
+  courseForm.coordinatorId = isAdmin.value ? '' : userStore.userInfo?.id || '';
   courseForm.description = '';
 }
 
-function resolveCoordinator(scId: string) {
-  return coordinatorOptions.value.find((sc) => sc.id === scId);
+function resolveCoordinator(coordinatorId: string) {
+  return coordinatorOptions.value.find((option) => option.id === coordinatorId);
 }
 
-function onSortChange({ prop, order }: { prop: keyof Course; order: 'ascending' | 'descending' | null }) {
+function onSortChange({
+  prop,
+  order,
+}: { prop: keyof Course; order: 'ascending' | 'descending' | null }) {
   sortState.value = { prop, order };
 }
 
@@ -356,23 +395,29 @@ function openEditCourse(course: Course) {
   courseYear.value = yearOptions.includes(yearPart) ? yearPart : String(currentYear);
   courseSeason.value = seasonOptions.includes(seasonPart) ? seasonPart : '';
   courseForm.term = courseSeason.value ? `${courseYear.value} ${courseSeason.value}` : '';
-  courseForm.scId = course.scId;
+  courseForm.coordinatorId = course.coordinatorId;
   courseForm.description = course.description || '';
   courseDialogVisible.value = true;
 }
 
 function getApiErrorMessage(err: any) {
   const data = err?.response?.data;
-  if (!data) return 'Request failed.';
-  if (typeof data === 'string') return data;
+  if (!data) {
+    return 'Request failed.';
+  }
+  if (typeof data === 'string') {
+    return data;
+  }
 
   if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
     return data.non_field_errors[0];
   }
 
-  for (const key of ['code', 'term', 'name', 'scId', 'description']) {
+  for (const key of ['code', 'term', 'name', 'coordinatorId', 'description']) {
     const arr = (data as any)?.[key];
-    if (Array.isArray(arr) && arr.length) return arr[0];
+    if (Array.isArray(arr) && arr.length) {
+      return arr[0];
+    }
   }
 
   return 'Request failed.';
@@ -381,12 +426,14 @@ function getApiErrorMessage(err: any) {
 
 function submitCourse() {
   courseFormRef.value?.validate(async (valid) => {
-    if (!valid) return;
+    if (!valid) {
+      return;
+    }
     const payload = {
       name: courseForm.name,
       code: courseForm.code,
       term: courseForm.term,
-      scId: courseForm.scId,
+      coordinatorId: courseForm.coordinatorId,
       description: courseForm.description,
     };
     try {
@@ -422,7 +469,9 @@ function confirmRemoveCourse(course: Course) {
 }
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
@@ -434,16 +483,50 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.courses-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.subtitle { margin: 4px 0 0; color: #606266; font-size: 14px; }
-.filters { padding: 12px 16px; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.filter-item { width: 240px; }
-.course-name { display: flex; flex-direction: column; }
-.course-name .name { font-weight: 600; }
-.course-name .code { color: #909399; font-size: 12px; }
-.term-selects { display: flex; gap: 8px; width: 100%; }
-.term-item { flex: 1 1 160px; }
-
+.courses-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+.filters {
+  padding: 12px 16px;
+}
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filter-item {
+  width: 240px;
+}
+.course-name {
+  display: flex;
+  flex-direction: column;
+}
+.course-name .name {
+  font-weight: 600;
+}
+.course-name .code {
+  color: #909399;
+  font-size: 12px;
+}
+.term-selects {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.term-item {
+  flex: 1 1 160px;
+}
 </style>

@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class User(models.Model):
@@ -25,7 +26,36 @@ class User(models.Model):
     organization = models.CharField(max_length=120, blank=True)
     bio = models.TextField(blank=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
+    auth_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
 
     def __str__(self):
         label = self.name or self.username
         return f"{label} ({self.role})"
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+    )
+    token_hash = models.CharField(max_length=128, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        status = 'used' if self.used_at else 'active'
+        return f"PasswordResetToken(user={self.user_id}, {status})"
+
+    def is_active(self) -> bool:
+        return self.used_at is None and timezone.now() <= self.expires_at
+
+    def mark_used(self) -> None:
+        if self.used_at is not None:
+            return
+        self.used_at = timezone.now()
+        self.save(update_fields=['used_at'])

@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from courses.models import Course
+from usersystem.models import User
 from .models import Assignment
 from template.models import AssignmentTemplate
 
@@ -10,12 +11,18 @@ from template.models import AssignmentTemplate
 class AssignmentTemplateAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.coordinator = User.objects.create(
+            username="sc001",
+            password="test-pass",
+            role="sc",
+            status=User.STATUS_ACTIVE,
+        )
         self.course = Course.objects.create(
-            Course_name="Intro to AI",
+            course_name="Intro to AI",
             code="AI101",
             semester="2024",
-            Description="Test course",
-            coordinator="SC001",
+            description="Test course",
+            coordinator=self.coordinator,
         )
         self.assignment = Assignment.objects.create(
             course=self.course,
@@ -23,6 +30,7 @@ class AssignmentTemplateAPITests(TestCase):
             type="essay",
             description="Write about AI ethics.",
         )
+        self.client.force_authenticate(user=self.coordinator)
 
     def test_save_template_creates_record(self):
         url = reverse("Assignment:assignments-template", args=[self.assignment.id])

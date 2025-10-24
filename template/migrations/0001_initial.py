@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("Assignment", "0001_initial"),
+        ("assignment", "0001_initial"),
     ]
 
     operations = [
@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
                     models.OneToOneField(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="ai_template",
-                        to="Assignment.assignment",
+                        to="assignment.assignment",
                     ),
                 ),
             ],

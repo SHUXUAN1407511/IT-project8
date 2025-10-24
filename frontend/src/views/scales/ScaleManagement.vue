@@ -71,7 +71,7 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="Actions" width="140" fixed="right">
+            <el-table-column v-if="isAdmin" label="Actions" width="140" fixed="right">
               <template #default="{ row, $index }">
                 <el-button
                   link
@@ -103,13 +103,14 @@
           <div class="history-scroll">
             <el-timeline>
               <el-timeline-item
-                v-for="version in defaultScale?.history || []"
+                v-for="version in defaultVersionTimeline"
                 :key="version.id"
                 :timestamp="formatDate(version.updatedAt)"
               >
                 <div class="version-item">
                   <div>
                     <strong>v{{ version.version }}</strong>
+                    <span v-if="isCurrentDefaultVersion(version)" class="tag">Current</span>
                     <span class="muted"> · {{ version.updatedBy }}</span>
                     <p class="muted">{{ version.notes || 'No notes' }}</p>
                   </div>
@@ -124,7 +125,7 @@
               </el-timeline-item>
             </el-timeline>
           </div>
-          <div v-if="!(defaultScale?.history?.length)" class="empty-message">No history yet</div>
+          <div v-if="!defaultVersionTimeline.length" class="empty-message">No history yet</div>
         </el-card>
       </el-col>
     </el-row>
@@ -199,14 +200,15 @@
               </template>
             </el-table-column>
           </el-table>
-          <div v-else class="empty-message">
-            <template v-if="personalScale">
-              No levels configured. Click “Add level” to create your version.
-            </template>
-            <template v-else>
-              You do not have a personalised scale yet. Modify the default levels and save to create one.
-            </template>
-          </div>
+      <div v-else class="empty-message">
+        <template v-if="personalScale">
+          No levels configured. Click “Add level” to create your version.
+        </template>
+        <template v-else>
+          <span>You do not have a personalised scale yet.</span>
+          <span>Modify the default levels and save to create one.</span>
+        </template>
+      </div>
         </el-card>
       </el-col>
 
@@ -249,6 +251,10 @@
     >
       <el-form :model="levelDialog.form" label-width="150px">
         <el-form-item label="Level">
+          <template #label>
+            <span class="required-star">*</span>
+            <span>Level</span>
+          </template>
           <el-input v-model="levelDialog.form.label" />
         </el-form-item>
         <el-form-item label="AI Assessment Scale">
@@ -272,8 +278,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { useUserStore } from '@/store/user';
-import { useDataStore, type ScaleLevel, type ScaleVersion } from '@/store/data';
+import { getErrorMessage } from '@/utils/errors';
+import { useUserStore } from '@/store/useUserStore';
+import { useDataStore, type ScaleLevel, type ScaleVersion } from '@/store/useDataStore';
 
 type ScaleScope = 'default' | 'personal';
 
@@ -300,14 +307,36 @@ const normalizedRole = computed(() => {
 const isAdmin = computed(() => normalizedRole.value === 'admin');
 const isSc = computed(() => normalizedRole.value === 'sc');
 const defaultScale = computed(() => dataStore.defaultScale);
+const defaultVersionTimeline = computed<ScaleVersion[]>(() => {
+  const versions: ScaleVersion[] = [];
+  const current = defaultScale.value?.currentVersion;
+  if (current) {
+    versions.push(current);
+  }
+  const history = defaultScale.value?.history || [];
+  history.forEach((entry) => {
+    if (entry) {
+      versions.push(entry);
+    }
+  });
+  return versions;
+});
 const personalScale = computed(() => {
-  if (!isSc.value) return null;
+  if (!isSc.value) {
+    return null;
+  }
   const candidates = new Set<string>();
   const username = userStore.userInfo?.username;
   const userId = userStore.userInfo?.id;
-  if (username) candidates.add(String(username).trim());
-  if (userId) candidates.add(String(userId).trim());
-  if (!candidates.size) return null;
+  if (username) {
+    candidates.add(String(username).trim());
+  }
+  if (userId) {
+    candidates.add(String(userId).trim());
+  }
+  if (!candidates.size) {
+    return null;
+  }
 
   return (
     dataStore.customScales.find((scale) => {
@@ -385,8 +414,12 @@ function openLevelDialog(scope: ScaleScope, level: ScaleLevel | null) {
 }
 
 function removeLevel(scope: ScaleScope, index: number) {
-  if (scope === 'default' && !canEditDefault.value) return;
-  if (scope === 'personal' && !canEditPersonal.value) return;
+  if (scope === 'default' && !canEditDefault.value) {
+    return;
+  }
+  if (scope === 'personal' && !canEditPersonal.value) {
+    return;
+  }
   const buffer = targetLevels(scope);
   buffer.value.splice(index, 1);
 }
@@ -394,7 +427,9 @@ function removeLevel(scope: ScaleScope, index: number) {
 function saveLevel() {
   const scope = levelDialog.scope;
   const editable = scope === 'default' ? canEditDefault.value : canEditPersonal.value;
-  if (!editable) return;
+  if (!editable) {
+    return;
+  }
 
   const label = levelDialog.form.label.trim();
   if (!label) {
@@ -425,54 +460,72 @@ function saveLevel() {
 
 async function saveScale(scope: ScaleScope) {
   if (scope === 'default') {
-    if (!canEditDefault.value) return;
+    if (!canEditDefault.value) {
+      return;
+    }
     const targetScaleId = defaultScale.value?.id || 'system_default';
-    await dataStore.saveScaleVersion(
-      {
-        scaleId: targetScaleId,
-        levels: defaultLevels.value,
-        updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
-        notes: 'Updated default scale',
-      },
-      {
-        ensureRecord: {
-          name: 'Default Scale',
-          ownerType: 'system',
-          ownerId: 'system',
-          isPublic: true,
+    try {
+      await dataStore.saveScaleVersion(
+        {
+          scaleId: targetScaleId,
+          levels: defaultLevels.value,
+          updatedBy: userStore.userInfo?.name || userStore.userInfo?.username || 'Coordinator',
+          updatedById: userStore.userInfo?.id ? String(userStore.userInfo.id) : undefined,
+          notes: 'Updated default scale',
         },
-      },
-    );
-    ElMessage.success('Default scale saved as a new version.');
+        {
+          ensureRecord: {
+            name: 'Default Scale',
+            ownerType: 'system',
+            ownerId: 'system',
+            isPublic: true,
+          },
+        },
+      );
+      ElMessage.success('Default scale saved as a new version.');
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to save the default scale.');
+      ElMessage.error(message);
+    }
     return;
   }
 
-  if (!canEditPersonal.value) return;
+  if (!canEditPersonal.value) {
+    return;
+  }
   const username = userStore.userInfo?.username || 'sc_user';
   const displayName = userStore.userInfo?.name || username;
   const targetScaleId = personalScale.value?.id || 'sc_personal';
-  await dataStore.saveScaleVersion(
-    {
-      scaleId: targetScaleId,
-      levels: personalLevels.value,
-      updatedBy: displayName,
-      notes: 'Updated personal scale',
-    },
-    {
-      ensureRecord: {
-        name: `${displayName}'s Scale`,
-        ownerType: 'sc',
-        ownerId: username,
-        isPublic: false,
+  try {
+    await dataStore.saveScaleVersion(
+      {
+        scaleId: targetScaleId,
+        levels: personalLevels.value,
+        updatedBy: displayName,
+        updatedById: userStore.userInfo?.id ? String(userStore.userInfo.id) : undefined,
+        notes: 'Updated personal scale',
       },
-    },
-  );
-  ElMessage.success('Your personal scale has been saved.');
+      {
+        ensureRecord: {
+          name: `${displayName}'s Scale`,
+          ownerType: 'sc',
+          ownerId: username,
+          isPublic: false,
+        },
+      },
+    );
+    ElMessage.success('Your personal scale has been saved.');
+  } catch (error) {
+    const message = getErrorMessage(error, 'Failed to save your personal scale.');
+    ElMessage.error(message);
+  }
 }
 
 function cloneVersion(version: ScaleVersion, scope: ScaleScope) {
   const editable = scope === 'default' ? canEditDefault.value : canEditPersonal.value;
-  if (!editable) return;
+  if (!editable) {
+    return;
+  }
 
   const levels = (version.levels || []).map((level) => normalizeLevel(level));
   if (!levels.length) {
@@ -482,11 +535,19 @@ function cloneVersion(version: ScaleVersion, scope: ScaleScope) {
   const buffer = targetLevels(scope);
   buffer.value = levels;
   const label = scope === 'default' ? 'default' : 'personal';
-  ElMessage.success(`Loaded v${version.version} into the ${label} editor. Save to create a new version.`);
+  ElMessage.success(
+    `Loaded v${version.version} into the ${label} editor. Save to create a new version.`,
+  );
+}
+
+function isCurrentDefaultVersion(version: ScaleVersion) {
+  return defaultScale.value?.currentVersion?.id === version.id;
 }
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
@@ -498,14 +559,49 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.scale-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
-.subtitle { color: #606266; margin: 4px 0 0; max-width: 520px; }
-.content { margin-top: 4px; }
-.panel { display: flex; flex-direction: column; gap: 16px; height: 100%; }
-.panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.panel-meta { font-size: 12px; color: #909399; text-align: right; display: flex; flex-direction: column; gap: 4px; }
-.history-card { min-height: 100%; }
+.scale-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.subtitle {
+  color: #606266;
+  margin: 4px 0 0;
+  max-width: 520px;
+}
+.content {
+  margin-top: 4px;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.panel-meta {
+  font-size: 12px;
+  color: #909399;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.history-card {
+  min-height: 100%;
+}
 .history-scroll {
   max-height: 240px;
   overflow-y: auto;
@@ -521,8 +617,15 @@ function formatDate(value?: string) {
 .history-scroll:hover::-webkit-scrollbar-thumb {
   background-color: rgba(144, 147, 153, 0.6);
 }
-.version-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.mt-12 { margin-top: 12px; }
+.version-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.mt-12 {
+  margin-top: 12px;
+}
 .cell-text {
   display: inline-flex;
   align-items: center;
@@ -534,6 +637,28 @@ function formatDate(value?: string) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.muted { color: #909399; font-size: 13px; }
-.empty-message { padding: 24px 0; text-align: center; color: #909399; }
+.muted {
+  color: #909399;
+  font-size: 13px;
+}
+.empty-message {
+  padding: 24px 0;
+  text-align: center;
+  color: #909399;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: #f0f9eb;
+  color: #529b2e;
+  font-size: 12px;
+  line-height: 1;
+}
+.required-star {
+  color: #f56c6c;
+  margin-right: 4px;
+}
 </style>

@@ -2,16 +2,14 @@ import uuid
 from django.db import models
 
 
-# -------------------------
-# 旧：简易量规（/scales/）
-# -------------------------
+# Legacy single version scale exposed under /scales/.
 class AIUserScale(models.Model):
     username = models.CharField(max_length=128, db_index=True)
     name = models.CharField(max_length=255)
     level = models.CharField(max_length=64)
     notes = models.TextField(null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)  # 输出到秒
+    created_at = models.DateTimeField(auto_now_add=True)  # Stored with second precision
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -23,9 +21,7 @@ class AIUserScale(models.Model):
         return f"{self.username} - {self.name} ({self.level})"
 
 
-# ---------------------------------------
-# 新：版本化量规（/scale-records/）
-# ---------------------------------------
+# Versioned scale set used by /scale-records/.
 class ScaleRecord(models.Model):
     OWNER_SYSTEM = "system"
     OWNER_SC = "sc"
@@ -40,7 +36,7 @@ class ScaleRecord(models.Model):
     owner_id = models.CharField(max_length=128, null=True, blank=True)
     is_public = models.BooleanField(default=False)
 
-    created_at = models.DateTimeField(auto_now_add=True)  # 内部用
+    created_at = models.DateTimeField(auto_now_add=True)  # Internal ordering field
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

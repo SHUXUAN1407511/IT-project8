@@ -8,7 +8,7 @@ class AssignmentTemplate(models.Model):
     """
 
     assignment = models.OneToOneField(
-        "Assignment.Assignment",
+        "assignment.Assignment",
         on_delete=models.CASCADE,
         related_name="ai_template",
     )

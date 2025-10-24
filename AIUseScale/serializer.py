@@ -2,9 +2,7 @@ from rest_framework import serializers
 from .models import AIUserScale, ScaleRecord, ScaleVersion, ScaleLevel
 
 
-# -------------------------
-# 旧接口：/scales/
-# -------------------------
+# Serializers for the legacy /scales/ endpoints.
 class AIUserScaleSerializer(serializers.ModelSerializer):
     notes = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
@@ -32,13 +30,16 @@ class AIUserScaleSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# -------------------------
-# 新接口：/scale-records/
-# -------------------------
+# Serializers backing the versioned /scale-records/ endpoints.
 class ScaleLevelSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="level_code", max_length=64)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    aiUsage = serializers.CharField(source="ai_usage", required=False, allow_blank=True, allow_null=True)
+    aiUsage = serializers.CharField(
+        source="ai_usage",
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
     acknowledgement = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     instructions = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
@@ -51,7 +52,11 @@ class ScaleLevelSerializer(serializers.ModelSerializer):
 
 
 class ScaleVersionSerializer(serializers.ModelSerializer):
-    updatedAt = serializers.DateTimeField(source="updated_at", format="%Y-%m-%d %H:%M:%S", read_only=True)
+    updatedAt = serializers.DateTimeField(
+        source="updated_at",
+        format="%Y-%m-%d %H:%M:%S",
+        read_only=True,
+    )
     updatedBy = serializers.CharField(source="updated_by")
     levels = ScaleLevelSerializer(many=True)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -63,7 +68,12 @@ class ScaleVersionSerializer(serializers.ModelSerializer):
 
 class ScaleRecordSerializer(serializers.ModelSerializer):
     ownerType = serializers.CharField(source="owner_type")
-    ownerId = serializers.CharField(source="owner_id", required=False, allow_null=True, allow_blank=True)
+    ownerId = serializers.CharField(
+        source="owner_id",
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
     isPublic = serializers.BooleanField(source="is_public")
 
     currentVersion = serializers.SerializerMethodField()
@@ -94,4 +104,5 @@ class SaveScaleVersionRequestSerializer(serializers.Serializer):
     scaleId = serializers.UUIDField()
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     updatedBy = serializers.CharField(required=False, allow_blank=True)
+    updatedById = serializers.CharField(required=False, allow_blank=True)
     levels = ScaleLevelSerializer(many=True)

@@ -9,12 +9,13 @@ import 'element-plus/dist/index.css';
 
 import permission from '@/directives/permission';
 import { appConfig } from '@/config';
+import { logger } from '@/utils/logger';
 
-console.info('[AppConfig]', appConfig);
+logger.info('[AppConfig]', appConfig);
 
 const app = createApp(App);
 app.use(pinia);
 app.use(router);
 app.use(ElementPlus);
-app.use(permission); 
+app.use(permission);
 app.mount('#app');

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-import { useUserStore } from '@/store/user';
+import { useUserStore } from '@/store/useUserStore';
 import pinia from '@/store';
 import { appConfig } from '@/config';
 

@@ -5,8 +5,18 @@
         <h2>Notification Centre</h2>
       </div>
       <div class="actions">
-        <el-button @click="filter = 'all'" :type="filter === 'all' ? 'primary' : 'default'">All</el-button>
-        <el-button @click="filter = 'unread'" :type="filter === 'unread' ? 'primary' : 'default'">Unread</el-button>
+        <el-button
+          @click="filter = 'all'"
+          :type="filter === 'all' ? 'primary' : 'default'"
+        >
+          All
+        </el-button>
+        <el-button
+          @click="filter = 'unread'"
+          :type="filter === 'unread' ? 'primary' : 'default'"
+        >
+          Unread
+        </el-button>
         <el-button type="primary" plain :disabled="!hasUnread" @click="markAll">
           Mark all as read
         </el-button>
@@ -55,7 +65,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useDataStore } from '@/store/data';
+import { useDataStore } from '@/store/useDataStore';
 import type { NotificationItem } from '@/services/api';
 
 const dataStore = useDataStore();
@@ -88,7 +98,10 @@ function navigate(notice: NotificationItem) {
   if (notice.relatedType === 'scale') {
     router.push({ path: '/scales' });
   } else if (notice.relatedType === 'assignment' && notice.relatedId) {
-    router.push({ name: 'TemplateEditor', params: { assignmentId: String(notice.relatedId) } });
+    router.push({
+      name: 'TemplateEditor',
+      params: { assignmentId: String(notice.relatedId) },
+    });
   } else if (notice.relatedType === 'course') {
     router.push({ path: '/courses' });
   }
@@ -132,14 +145,51 @@ function formatDate(value: string) {
 </script>
 
 <style scoped>
-.notification-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.subtitle { color: #606266; }
-.actions { display: flex; gap: 8px; }
-.notice { display: flex; flex-direction: column; gap: 6px; }
-.notice-header { display: flex; justify-content: space-between; align-items: center; }
-.tags { display: flex; gap: 8px; align-items: center; }
-.content { color: #303133; margin: 0; }
-.footer { display: flex; gap: 12px; }
-.empty-message { padding: 24px 0; text-align: center; color: #909399; }
+.notification-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.subtitle {
+  color: #606266;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.notice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.content {
+  color: #303133;
+  margin: 0;
+}
+.footer {
+  display: flex;
+  gap: 12px;
+}
+.empty-message {
+  padding: 24px 0;
+  text-align: center;
+  color: #909399;
+}
 </style>

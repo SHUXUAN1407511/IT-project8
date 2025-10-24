@@ -212,15 +212,16 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { useUserStore } from '@/store/user';
-import http from '@/services/http';
+import { useUserStore } from '@/store/useUserStore';
+import API, { type ExportFormat, type ExportTablePayload } from '@/services/api';
+import { logger } from '@/utils/logger';
 import {
   useDataStore,
   type Assignment,
   type TemplateRow,
   type ScaleRecord,
   type ScaleLevel,
-} from '@/store/data';
+} from '@/store/useDataStore';
 
 const route = useRoute();
 const router = useRouter();
@@ -241,9 +242,18 @@ const assignmentOptions = computed(() => {
 
   const courseNameById = (courseId: unknown) => {
     const targetId = asString(courseId);
-    if (!targetId) return '—';
+    if (!targetId) {
+      return '';
+    }
     const course = courses.find((item) => asString(item.id) === targetId);
-    return course?.name || '—';
+    return course?.name || '';
+  };
+
+  const resolveCourseName = (assignment: Assignment) => {
+    if (assignment.courseName) {
+      return assignment.courseName;
+    }
+    return courseNameById(assignment.courseId) || '—';
   };
 
   if (userStore.role === 'admin') {
@@ -252,7 +262,7 @@ const assignmentOptions = computed(() => {
       return {
         id,
         name: assignment.name,
-        course: courseNameById(assignment.courseId),
+        course: resolveCourseName(assignment),
       };
     });
   }
@@ -260,7 +270,7 @@ const assignmentOptions = computed(() => {
   if (userStore.role === 'sc') {
     const userId = asString(userStore.userInfo?.id);
     const courseIds = courses
-      .filter((course) => asString(course.scId) === userId)
+      .filter((course) => asString(course.coordinatorId) === userId)
       .map((course) => asString(course.id));
 
     return assignments
@@ -270,7 +280,7 @@ const assignmentOptions = computed(() => {
         return {
           id,
           name: assignment.name,
-          course: courseNameById(assignment.courseId),
+          course: resolveCourseName(assignment),
         };
       });
   }
@@ -288,7 +298,7 @@ const assignmentOptions = computed(() => {
         return {
           id,
           name: assignment.name,
-          course: courseNameById(assignment.courseId),
+          course: resolveCourseName(assignment),
         };
       });
   }
@@ -296,11 +306,39 @@ const assignmentOptions = computed(() => {
   return [];
 });
 
+const hasAssignmentAccess = (assignmentId: string | null | undefined) => {
+  if (!assignmentId) {
+    return false;
+  }
+  return assignmentOptions.value.some((option) => option.id === assignmentId);
+};
+
+function handleInaccessibleAssignment(notify = false) {
+  initialRouteAssignmentId.value = '';
+  if (selectedAssignmentId.value) {
+    selectedAssignmentId.value = '';
+  }
+  if (!userStore.isAuthenticated) {
+    router.replace({ name: 'Login' });
+    return;
+  }
+  if (notify) {
+    ElMessage.warning('You do not have access to that template.');
+  }
+  const fallbackRoute =
+    userStore.role === 'tutor'
+      ? { name: 'AssignmentManagement' }
+      : { path: '/templates' };
+  router.replace(fallbackRoute);
+}
+
 watch(
   assignmentOptions,
   (options) => {
     if (!options.length) {
       if (assignmentsLoaded.value) {
+        handleInaccessibleAssignment(assignmentsLoaded.value && !!selectedAssignmentId.value);
+      } else {
         initialRouteAssignmentId.value = '';
         selectedAssignmentId.value = '';
       }
@@ -322,7 +360,9 @@ watch(
 
 const assignment = computed<Assignment | undefined>(() => {
   const targetId = selectedAssignmentId.value;
-  if (!targetId) return undefined;
+  if (!targetId) {
+    return undefined;
+  }
   return dataStore.assignments.find((item) => asString(item.id) === targetId);
 });
 
@@ -338,21 +378,25 @@ const coordinatorOwnerIds = computed(() => {
     return [];
   }
 
-  const courseScId = asString(course.scId);
-  if (courseScId) {
-    ids.add(courseScId);
+  const courseCoordinatorId = asString(course.coordinatorId);
+  if (courseCoordinatorId) {
+    ids.add(courseCoordinatorId);
   }
 
-  const scUser = dataStore.users.find((user) => asString(user.id) === courseScId);
+  const scUser = dataStore.users.find((user) => asString(user.id) === courseCoordinatorId);
   if (scUser?.username) {
     ids.add(scUser.username);
   }
 
-  return Array.from(ids).filter((value): value is string => typeof value === 'string' && value.length > 0);
+  return Array.from(ids).filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
 });
 
 const courseLabel = computed(() => {
-  if (!assignment.value) return '';
+  if (!assignment.value) {
+    return '';
+  }
   const courseId = asString(assignment.value.courseId);
   const course = dataStore.courses.find((c) => asString(c.id) === courseId);
   return course ? `${course.name} · ${course.term}` : '';
@@ -430,7 +474,9 @@ const rowsFingerprint = (rows: TemplateRow[] | undefined | null) =>
   JSON.stringify((rows || []).map((row) => fingerprintRow(row)));
 
 function readLevelInstructions(level: Partial<TemplateRow> | ScaleLevel | undefined | null) {
-  if (!level) return '';
+  if (!level) {
+    return '';
+  }
   const candidates = [
     (level as ScaleLevel).instructions,
     (level as Record<string, unknown>)?.instructionsToStudents,
@@ -448,7 +494,9 @@ function readLevelInstructions(level: Partial<TemplateRow> | ScaleLevel | undefi
 }
 
 function readLevelAcknowledgement(level: Partial<TemplateRow> | ScaleLevel | undefined | null) {
-  if (!level) return '';
+  if (!level) {
+    return '';
+  }
   const candidates = [
     (level as ScaleLevel).acknowledgement,
     (level as Record<string, unknown>)?.acknowledgementText,
@@ -484,11 +532,17 @@ function isScaleCompatibleWithRows(
   scaleId: string | null | undefined,
   rows: TemplateRow[] | undefined | null,
 ) {
-  if (!scaleId || !rows) return false;
+  if (!scaleId || !rows) {
+    return false;
+  }
   const scale = findScaleById(scaleId);
-  if (!scale) return false;
+  if (!scale) {
+    return false;
+  }
   const ids = scaleLevelIds(scale);
-  if (!ids.size) return false;
+  if (!ids.size) {
+    return false;
+  }
   return rows.every((row) => !row.levelId || ids.has(row.levelId));
 }
 
@@ -539,14 +593,20 @@ const levelOptions = computed(
 );
 
 const canEdit = computed(() => {
-  if (!assignment.value) return false;
-  if (!userStore.isAuthenticated) return false;
-  if (userStore.role === 'admin') return true;
+  if (!assignment.value) {
+    return false;
+  }
+  if (!userStore.isAuthenticated) {
+    return false;
+  }
+  if (userStore.role === 'admin') {
+    return true;
+  }
   if (userStore.role === 'sc') {
     const course = dataStore.courses.find(
       (c) => asString(c.id) === asString(assignment.value?.courseId)
     );
-    return course?.scId === asString(userStore.userInfo?.id);
+    return course?.coordinatorId === asString(userStore.userInfo?.id);
   }
   if (userStore.role === 'tutor') {
     const tutorId = asString(userStore.userInfo?.id);
@@ -576,11 +636,10 @@ async function triggerTemplateRefresh() {
     const latest = await dataStore.refreshTemplate(assignmentId);
     const incomingFingerprint = rowsFingerprint(latest?.rows);
     if (incomingFingerprint !== templateFingerprint.value) {
-      // templateRecord watcher will rehydrate rows when store updates
       return;
     }
   } catch (error) {
-    console.warn('[TemplateEditor] Failed to refresh template:', error);
+    logger.warn('[TemplateEditor] Failed to refresh template:', error);
   }
 }
 
@@ -608,12 +667,25 @@ watch(
 
 watch(selectedAssignmentId, (id) => {
   if (id) {
-    if (asString(route.params.assignmentId) !== id) {
-      router.replace({ name: 'TemplateEditor', params: { assignmentId: id } });
+    if (!hasAssignmentAccess(id) && assignmentsLoaded.value) {
+      handleInaccessibleAssignment(assignmentsLoaded.value);
+      return;
     }
-    void dataStore.refreshTemplate(id);
+    if (asString(route.params.assignmentId) !== id) {
+      router.replace({
+        name: 'TemplateEditor',
+        params: { assignmentId: id },
+      });
+    }
+    if (assignmentsLoaded.value) {
+      void dataStore.refreshTemplate(id);
+    }
   } else if (route.path !== '/templates') {
-    router.replace({ path: '/templates' });
+    const fallbackRoute =
+      userStore.role === 'tutor'
+        ? { name: 'AssignmentManagement' }
+        : { path: '/templates' };
+    router.replace(fallbackRoute);
   }
   hydrateTemplate();
 });
@@ -705,8 +777,10 @@ onMounted(async () => {
     dataStore.fetchScales(),
   ]);
   assignmentsLoaded.value = true;
-  if (selectedAssignmentId.value) {
+  if (selectedAssignmentId.value && hasAssignmentAccess(selectedAssignmentId.value)) {
     await dataStore.refreshTemplate(selectedAssignmentId.value);
+  } else if (!hasAssignmentAccess(selectedAssignmentId.value)) {
+    handleInaccessibleAssignment(!!selectedAssignmentId.value);
   }
   hydrateTemplate();
 });
@@ -772,14 +846,18 @@ function removeRow(index: number) {
 
 function moveRow(index: number, step: number) {
   const targetIndex = index + step;
-  if (targetIndex < 0 || targetIndex >= editableRows.value.length) return;
+  if (targetIndex < 0 || targetIndex >= editableRows.value.length) {
+    return;
+  }
   const [row] = editableRows.value.splice(index, 1);
   editableRows.value.splice(targetIndex, 0, row);
 }
 
 function onLevelChange(row: TemplateRow, levelId: string) {
   const level = findLevel(levelId, { allowFallback: true });
-  if (!level) return;
+  if (!level) {
+    return;
+  }
   row.levelLabel = level.label;
   row.instructions = readLevelInstructions(level);
   row.acknowledgement = readLevelAcknowledgement(level);
@@ -789,7 +867,9 @@ type SyncOptions = { allowFallback?: boolean };
 
 function syncRowsWithScale(options: SyncOptions = {}) {
   const allowFallback = !!options.allowFallback;
-  if (!levelOptions.value.length || !editableRows.value.length) return;
+  if (!levelOptions.value.length || !editableRows.value.length) {
+    return;
+  }
   editableRows.value.forEach((row) => {
     const match = findLevel(row.levelId, { allowFallback: false });
     if (match) {
@@ -802,7 +882,9 @@ function syncRowsWithScale(options: SyncOptions = {}) {
       return;
     }
     const fallback = findLevel(undefined, { allowFallback: true });
-    if (!fallback) return;
+    if (!fallback) {
+      return;
+    }
     row.levelId = fallback.id;
     row.levelLabel = fallback.label;
     row.instructions = readLevelInstructions(fallback);
@@ -863,9 +945,12 @@ async function saveTemplate(publish: boolean) {
     ElMessage.error('Assignment information is incomplete.');
     return;
   }
+  const actorId = asString(userStore.userInfo.id);
+  const actorName = userStore.userInfo.name || userStore.userInfo.username || '';
   await dataStore.saveTemplate(targetAssignmentId, {
     rows: editableRows.value,
-    updatedBy: userStore.userInfo.name,
+    updatedBy: actorName,
+    updatedById: actorId,
     publish,
   });
   ElMessage.success(publish ? 'Template published.' : 'Draft saved.');
@@ -874,16 +959,9 @@ async function saveTemplate(publish: boolean) {
   }
 }
 
-type ExportFormat = 'pdf' | 'xlsx';
-
 interface ExportColumn {
   label: string;
   pick(row: TemplateRow, index: number): string;
-}
-
-interface ExportRequestPayload {
-  title: string;
-  data: Record<string, string[]>;
 }
 
 function buildExportFilename(extension: ExportFormat, timestamp: Date) {
@@ -983,9 +1061,11 @@ function exportColumns(): ExportColumn[] {
   ];
 }
 
-function buildExportRequestPayload(): ExportRequestPayload | null {
+function buildExportRequestPayload(): ExportTablePayload | null {
   const currentAssignment = assignment.value;
-  if (!currentAssignment) return null;
+  if (!currentAssignment) {
+    return null;
+  }
   const columns = exportColumns();
   const rows = editableRows.value;
 
@@ -1020,7 +1100,6 @@ async function exportTemplate(format: ExportFormat) {
     return;
   }
 
-  const endpoint = format === 'pdf' ? '/export/pdf/' : '/export/excel/';
   const successMessage =
     format === 'pdf'
       ? 'PDF export ready for download.'
@@ -1032,14 +1111,12 @@ async function exportTemplate(format: ExportFormat) {
 
   try {
     isExporting.value = true;
-    const blob = await http.post<Blob>(endpoint, payload, {
-      responseType: 'blob',
-    });
+    const blob = await API.exporter.download(format, payload);
     const filename = buildExportFilename(format, now);
     triggerDownload(blob, filename);
     ElMessage.success(successMessage);
   } catch (error) {
-    console.error(`Failed to export template ${format}:`, error);
+    logger.error(`Failed to export template ${format}:`, error);
     ElMessage.error(errorMessage);
   } finally {
     isExporting.value = false;
@@ -1052,18 +1129,67 @@ function generateRowId() {
 </script>
 
 <style scoped>
-.template-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-.subtitle { margin: 4px 0 0; color: #606266; font-size: 14px; }
-.filters { padding: 12px 16px; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.filter-item { width: 280px; }
-.filter-empty { padding: 4px 0; color: #909399; font-size: 14px; }
-.panel { display: flex; flex-direction: column; gap: 16px; }
-.label { color: #606266; font-size: 13px; margin-right: 4px; }
-.table-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-.legend { font-size: 13px; color: #606266; display: flex; gap: 8px; align-items: center; }
-.mt-6 { margin-top: 6px; }
+.template-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+.filters {
+  padding: 12px 16px;
+}
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-item {
+  width: 280px;
+}
+.filter-empty {
+  padding: 4px 0;
+  color: #909399;
+  font-size: 14px;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.label {
+  color: #606266;
+  font-size: 13px;
+  margin-right: 4px;
+}
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.legend {
+  font-size: 13px;
+  color: #606266;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mt-6 {
+  margin-top: 6px;
+}
 .readonly-area :deep(.el-textarea__inner) {
   background-color: #f5f7fa;
   color: #606266;

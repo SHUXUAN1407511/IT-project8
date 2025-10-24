@@ -48,7 +48,9 @@
         </el-table-column>
         <el-table-column label="Status" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'info'">{{ row.status === 'active' ? 'Active' : 'Inactive' }}</el-tag>
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'">
+              {{ row.status === 'active' ? 'Active' : 'Inactive' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="lastLoginAt" label="Last sign-in" width="200">
@@ -98,8 +100,8 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
-import { useDataStore, type ManagedUser } from '@/store/data';
-import type { UserRole } from '@/store/user';
+import { useDataStore, type ManagedUser } from '@/store/useDataStore';
+import type { UserRole } from '@/store/useUserStore';
 
 const dataStore = useDataStore();
 
@@ -140,8 +142,7 @@ const formRules: FormRules = {
   name: [{ required: true, message: 'Please enter a name.', trigger: 'blur' }],
   username: [{ required: true, message: 'Please enter a username.', trigger: 'blur' }],
   email: [
-    { required: true, message: 'Please enter an email address.', trigger: 'blur' },
-    { type: 'email', message: 'Please enter a valid email address.', trigger: 'blur' }
+    { type: 'email', message: 'Please enter a valid email address.', trigger: 'blur' },
   ],
   role: [{ required: true, message: 'Please choose a role.', trigger: 'change' }],
 };
@@ -160,10 +161,13 @@ function openEditDialog(user: ManagedUser) {
 
 function submit() {
   formRef.value?.validate(async (valid) => {
-    if (!valid) return;
+    if (!valid) {
+      return;
+    }
     await dataStore.updateUser(form.id, {
       name: form.name,
-      email: form.email,
+      username: form.username,
+      email: form.email || undefined,
       role: form.role as UserRole,
       phone: form.phone,
       organization: form.organization,
@@ -181,14 +185,22 @@ async function toggleStatus(user: ManagedUser) {
 }
 
 function roleLabel(role: string) {
-  if (role === 'admin') return 'Administrator';
-  if (role === 'sc') return 'Subject Coordinator';
-  if (role === 'tutor') return 'Tutor';
+  if (role === 'admin') {
+    return 'Administrator';
+  }
+  if (role === 'sc') {
+    return 'Subject Coordinator';
+  }
+  if (role === 'tutor') {
+    return 'Tutor';
+  }
   return role;
 }
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
@@ -200,10 +212,29 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.user-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: flex-start; align-items: center; gap: 16px; }
-.subtitle { color: #606266; }
-.filters { padding: 12px 16px; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.filter-item { width: 220px; }
+.user-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;
+}
+.subtitle {
+  color: #606266;
+}
+.filters {
+  padding: 12px 16px;
+}
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filter-item {
+  width: 220px;
+}
 </style>

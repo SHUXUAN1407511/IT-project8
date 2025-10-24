@@ -1,5 +1,5 @@
 /**
- * 可覆盖 .env 里的值。
+ * Runtime overrides for values shipped from the .env files.
  */
 window.__APP_CONFIG__ = {
 };

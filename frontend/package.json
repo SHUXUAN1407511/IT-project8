@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.{ts,tsx,vue}\"",
+    "format": "prettier --check \"src/**/*.{ts,tsx,vue,css,json}\"",
+    "format:write": "prettier --write \"src/**/*.{ts,tsx,vue,css,json}\"",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -23,8 +27,21 @@
     "@types/node": "^24.4.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.7.0",
+    "@vue/eslint-config-typescript": "^14.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.29.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.5.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vue-tsc": "^3.0.5"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,vue}": "eslint --fix",
+    "src/**/*.{ts,tsx,vue,css,json}": "prettier --write"
   }
 }

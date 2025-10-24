@@ -17,12 +17,20 @@
         <el-card shadow="never" class="panel">
           <div class="panel-header">
             <h3>Default Scale – latest version</h3>
-            <el-button type="primary" link @click="router.push('/scales')">Open management</el-button>
+            <el-button
+              type="primary"
+              link
+              @click="router.push('/scales')"
+            >
+              Open management
+            </el-button>
           </div>
           <el-descriptions :column="1" size="small" border>
             <el-descriptions-item label="Version">
               <template #default>
-                <span v-if="defaultScale?.currentVersion">v{{ defaultScale.currentVersion.version }}</span>
+                <span v-if="defaultScale?.currentVersion">
+                  v{{ defaultScale.currentVersion.version }}
+                </span>
                 <span v-else>—</span>
               </template>
             </el-descriptions-item>
@@ -42,7 +50,13 @@
         <el-card shadow="never" class="panel">
           <div class="panel-header">
             <h3>Latest notifications</h3>
-            <el-button type="primary" link @click="router.push('/notifications')">View all</el-button>
+            <el-button
+              type="primary"
+              link
+              @click="router.push('/notifications')"
+            >
+              View all
+            </el-button>
           </div>
           <el-timeline v-if="recentNotices.length">
             <el-timeline-item
@@ -64,7 +78,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useDataStore } from '@/store/data';
+import { useDataStore } from '@/store/useDataStore';
 
 const router = useRouter();
 const dataStore = useDataStore();
@@ -104,7 +118,9 @@ const summaryCards = computed<SummaryCard[]>(() => [
 const recentNotices = computed(() => dataStore.notifications.slice(0, 3));
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
@@ -116,14 +132,45 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.dashboard { display: flex; flex-direction: column; gap: 16px; }
-.subtitle { color: #606266; }
-.cards { margin-top: 8px; }
-.card-title { font-size: 14px; color: #606266; }
-.card-value { font-size: 28px; font-weight: 600; margin: 8px 0; }
-.card-extra { color: #909399; font-size: 12px; }
-.sections { margin-top: 8px; }
-.panel { height: 100%; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.empty-message { padding: 24px 0; text-align: center; color: #909399; }
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.subtitle {
+  color: #606266;
+}
+.cards {
+  margin-top: 8px;
+}
+.card-title {
+  font-size: 14px;
+  color: #606266;
+}
+.card-value {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+.card-extra {
+  color: #909399;
+  font-size: 12px;
+}
+.sections {
+  margin-top: 8px;
+}
+.panel {
+  height: 100%;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.empty-message {
+  padding: 24px 0;
+  text-align: center;
+  color: #909399;
+}
 </style>

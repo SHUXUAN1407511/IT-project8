@@ -1,16 +1,10 @@
-<<<<<<< HEAD
-# IT-project8
-cd "/Users/hanzhang/Documents/学习/2025/第二学期/COMP30022/ass1/代码/IT-project8 19.34.34"
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install django==5.2.6 djangorestframework django-cors-headers pandas openpyxl reportlab mysqlclient
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
+# AI Use Declaration Platform
 
-cd "/Users/hanzhang/Documents/学习/2025/第二学期/COMP30022/ass1/代码/IT-project8-1 19.34.34/frontend"
-npm install
-npm run dev
-=======
-# IT-project8
->>>>>>> origin/backend
+This repository contains the Group 8 AI use declaration management system.
+
+- Backend: Django REST Framework (`manage.py`, apps such as `Assignment`, `usersystem`, `AIUseScale`)
+- Frontend: Vue 3 + Vite (`frontend/`)
+- Configuration reference: `config/client-config.example.env`
+- Full setup instructions for clients: `docs/CLIENT_SETUP.md`
+
+Follow the setup guide for the exact commands to install dependencies, apply migrations, and run both services.*** End Patch

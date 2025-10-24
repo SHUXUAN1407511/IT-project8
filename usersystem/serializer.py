@@ -43,3 +43,30 @@ class ManagedUserSerializer(serializers.ModelSerializer):
             "last_login_at",
         ]
         read_only_fields = ["id", "last_login_at"]
+
+
+class SelfProfileSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    organization = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    bio = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "name",
+            "email",
+            "role",
+            "status",
+            "phone",
+            "organization",
+            "bio",
+        ]
+        read_only_fields = ["id", "username", "role", "status"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["id"] = str(instance.id)
+        return data

@@ -14,6 +14,9 @@ class AssignmentSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False,
     )
+    courseName = serializers.CharField(source='course.course_name', read_only=True)
+    courseCode = serializers.CharField(source='course.code', read_only=True)
+    courseTerm = serializers.CharField(source='course.semester', read_only=True)
     name = serializers.CharField()
     type = serializers.CharField()
     description = serializers.CharField(allow_blank=True, required=False)
@@ -56,6 +59,9 @@ class AssignmentSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'courseId',
+            'courseName',
+            'courseCode',
+            'courseTerm',
             'name',
             'type',
             'description',
@@ -67,7 +73,14 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'createdAt',
             'updatedAt',
         ]
-        read_only_fields = ['id', 'createdAt', 'updatedAt']
+        read_only_fields = [
+            'id',
+            'createdAt',
+            'updatedAt',
+            'courseName',
+            'courseCode',
+            'courseTerm',
+        ]
 
     def validate_aiDeclarationStatus(self, value: str):
         if value and value not in dict(Assignment.STATUS_CHOICES):
@@ -97,6 +110,11 @@ class AssignmentSerializer(serializers.ModelSerializer):
                 continue
             else:
                 data[key] = value
+
+        course = getattr(instance, 'course', None)
+        data['courseName'] = getattr(course, 'course_name', '') if course else ''
+        data['courseCode'] = getattr(course, 'code', '') if course else ''
+        data['courseTerm'] = getattr(course, 'semester', '') if course else ''
         return data
 
     def create(self, validated_data):

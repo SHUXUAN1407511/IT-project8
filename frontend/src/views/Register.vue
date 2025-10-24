@@ -13,7 +13,11 @@
         @keyup.enter="submit"
       >
         <el-form-item label="Username" prop="username">
-          <el-input v-model="form.username" placeholder="Choose a username" autocomplete="username" />
+          <el-input
+            v-model="form.username"
+            placeholder="Choose a username"
+            autocomplete="username"
+          />
         </el-form-item>
         <el-form-item label="Password" prop="password">
           <el-input
@@ -47,7 +51,9 @@
 
       <div class="links">
         <span>Already registered?</span>
-        <router-link class="login-link" :to="{ name: 'Login' }">Back to sign in</router-link>
+        <router-link class="login-link" :to="{ name: 'Login' }">
+          Back to sign in
+        </router-link>
       </div>
     </el-card>
   </div>
@@ -57,7 +63,8 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { useUserStore } from '@/store/user';
+import { getErrorMessage } from '@/utils/errors';
+import { useUserStore } from '@/store/useUserStore';
 import type { UserRole } from '@/services/api';
 
 const router = useRouter();
@@ -97,9 +104,13 @@ const rules: FormRules = {
 };
 
 async function submit() {
-  if (loading.value) return;
+  if (loading.value) {
+    return;
+  }
   formRef.value?.validate(async (valid) => {
-    if (!valid) return;
+    if (!valid) {
+      return;
+    }
     loading.value = true;
     try {
       await userStore.register({
@@ -110,7 +121,7 @@ async function submit() {
       ElMessage.success('Registration successful. Please log in.');
       router.push({ name: 'Login' });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Registration failed.';
+      const message = getErrorMessage(error, 'Registration failed.');
       ElMessage.error(message);
     } finally {
       loading.value = false;
@@ -120,12 +131,46 @@ async function submit() {
 </script>
 
 <style scoped>
-.register-page { min-height: 100vh; display: flex; justify-content: center; align-items: center; background: linear-gradient(135deg, #f6f9fc 0%, #edf1f5 100%); padding: 24px; }
-.register-card { width: 380px; }
-.title { text-align: center; margin-bottom: 4px; }
-.subtitle { text-align: center; color: #606266; margin-bottom: 20px; font-size: 13px; }
-.auth-form { display: flex; flex-direction: column; gap: 12px; }
-.full { width: 100%; }
-.links { margin-top: 16px; font-size: 13px; text-align: center; display: flex; justify-content: center; gap: 6px; align-items: center; color: #606266; }
-.login-link { color: #409eff; }
+.register-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #f6f9fc 0%, #edf1f5 100%);
+  padding: 24px;
+}
+.register-card {
+  width: 380px;
+}
+.title {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.subtitle {
+  text-align: center;
+  color: #606266;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.full {
+  width: 100%;
+}
+.links {
+  margin-top: 16px;
+  font-size: 13px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  align-items: center;
+  color: #606266;
+}
+.login-link {
+  color: #409eff;
+}
 </style>

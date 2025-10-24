@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("AIUseScale", "0003_alter_scalerecord_options_aiuserscale"),
+        ("ai_use_scale", "0003_alter_scalerecord_options_aiuserscale"),
     ]
 
     operations = [

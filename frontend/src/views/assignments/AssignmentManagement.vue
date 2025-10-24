@@ -26,11 +26,14 @@
     <el-card class="filters" shadow="never">
       <div class="filter-row">
         <el-select
-          v-model="selectedCourseId"
-          placeholder="Choose a course"
+          v-model="selectedCourseIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
           filterable
+          clearable
+          placeholder="Filter by course"
           class="filter-item"
-          @change="onCourseChange"
         >
           <el-option
             v-for="course in courseOptions"
@@ -51,8 +54,12 @@
         </el-input>
         <el-select
           v-model="typeFilter"
-          placeholder="Assignment type"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          filterable
           clearable
+          placeholder="Assignment type"
           class="filter-item"
         >
           <el-option
@@ -64,6 +71,10 @@
         </el-select>
         <el-select
           v-model="statusFilter"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          filterable
           placeholder="Template status"
           clearable
           class="filter-item"
@@ -81,7 +92,7 @@
         stripe
         border
         height="480"
-        empty-text="Select a course to view assignments"
+        empty-text="No assignments found"
       >
         <el-table-column
           prop="name"
@@ -142,6 +153,7 @@
               Edit
             </el-button>
             <el-button
+              v-if="canManageAssignments"
               link
               type="danger"
               v-permission="['admin', 'sc']"
@@ -171,6 +183,7 @@
             v-model="assignmentForm.courseId"
             placeholder="Choose a course"
             :disabled="!!assignmentForm.id"
+            filterable
           >
             <el-option
               v-for="course in courseOptions"
@@ -203,6 +216,7 @@
           <el-select
             v-model="assignmentForm.tutorIds"
             multiple
+            filterable
             placeholder="Select tutors"
             collapse-tags
             collapse-tags-tooltip
@@ -270,8 +284,14 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
-import { useUserStore } from '@/store/user';
-import { useDataStore, type Assignment, type AssignmentType, type ManagedUser } from '@/store/data';
+import { useUserStore } from '@/store/useUserStore';
+import { getErrorMessage } from '@/utils/errors';
+import {
+  useDataStore,
+  type Assignment,
+  type AssignmentType,
+  type ManagedUser,
+} from '@/store/useDataStore';
 import { appConfig } from '@/config';
 
 const router = useRouter();
@@ -279,13 +299,17 @@ const userStore = useUserStore();
 const dataStore = useDataStore();
 
 onMounted(async () => {
-  await Promise.allSettled([dataStore.fetchCourses(), dataStore.fetchAssignments(), dataStore.fetchUsers()]);
+  await Promise.allSettled([
+    dataStore.fetchCourses(),
+    dataStore.fetchAssignments(),
+    dataStore.fetchUsers(),
+  ]);
 });
 
 const searchQuery = ref('');
-const selectedCourseId = ref('');
-const typeFilter = ref<AssignmentType | ''>('');
-const statusFilter = ref<'missing' | 'draft' | 'published' | ''>('');
+const selectedCourseIds = ref<string[]>([]);
+const typeFilter = ref<AssignmentType[]>([]);
+const statusFilter = ref<Array<'missing' | 'draft' | 'published'>>([]);
 
 const assignmentDialogVisible = ref(false);
 const assignmentFormRef = ref<FormInstance>();
@@ -294,7 +318,9 @@ const assignmentTypeOptions = computed(() => dataStore.assignmentTypes);
 const typeManagerVisible = ref(false);
 const typeManagerList = ref<string[]>([]);
 const newType = ref('');
-const canManageAssignmentTypes = computed(() => userStore.role === 'sc' || userStore.role === 'admin');
+const canManageAssignmentTypes = computed(
+  () => userStore.role === 'sc' || userStore.role === 'admin',
+);
 const canManageAssignments = computed(() => ['admin', 'sc'].includes(userStore.role));
 
 const assignmentForm = reactive({
@@ -311,7 +337,6 @@ const assignmentRules: FormRules = {
   type: [{ required: true, message: 'Please select an assignment type.', trigger: 'change' }],
 };
 
-/* ========= 新增：安全数组（保证下面的 map/filter 永远作用于数组） ========= */
 const coursesArr = computed(() =>
   Array.isArray(dataStore.courses) ? dataStore.courses : []
 );
@@ -321,20 +346,20 @@ const assignmentsArr = computed(() =>
 const tutorsArr = computed(() =>
   Array.isArray((dataStore as any).tutors) ? (dataStore as any).tutors : []
 );
-/* ===================================================================== */
 
 watch(
   () => assignmentForm.type,
   (value) => {
     const trimmed = value?.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     if (!dataStore.assignmentTypes.includes(trimmed)) {
       dataStore.setAssignmentTypes([...dataStore.assignmentTypes, trimmed]);
     }
   }
 );
 
-/* —— 改 here：原来 watch dataStore.assignments.map(...) —— */
 watch(
   () => assignmentsArr.value.map((item) => item.type),
   (types) => {
@@ -349,13 +374,14 @@ watch(
   { immediate: true }
 );
 
-/* —— 改 here：courseOptions 里统一用 coursesArr/assignmentsArr —— */
 const courseOptions = computed(() => {
   if (userStore.role === 'admin') {
     return coursesArr.value;
   }
   if (userStore.role === 'sc') {
-    return coursesArr.value.filter((course) => course.scId === userStore.userInfo?.id);
+    return coursesArr.value.filter(
+      (course) => course.coordinatorId === userStore.userInfo?.id,
+    );
   }
   if (userStore.role === 'tutor') {
     const tutorId = userStore.userInfo?.id;
@@ -373,12 +399,11 @@ watch(
   courseOptions,
   (options) => {
     if (!options.length) {
-      selectedCourseId.value = '';
+      selectedCourseIds.value = [];
       return;
     }
-    if (!selectedCourseId.value || !options.some((c) => c.id === selectedCourseId.value)) {
-      selectedCourseId.value = options[0].id;
-    }
+    const validIds = new Set(options.map((course) => course.id));
+    selectedCourseIds.value = selectedCourseIds.value.filter((id) => validIds.has(id));
   },
   { immediate: true }
 );
@@ -388,25 +413,40 @@ const tutorOptions = computed(() => tutorsArr.value);
 const filteredAssignments = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return assignmentsArr.value.filter((assignment) => {
-    if (selectedCourseId.value && assignment.courseId !== selectedCourseId.value) {
+    const courseFilters = selectedCourseIds.value;
+    if (
+      courseFilters.length &&
+      !courseFilters.includes(assignment.courseId)
+    ) {
       return false;
     }
     if (
       userStore.role === 'tutor' &&
-      !(Array.isArray(assignment.tutorIds) && assignment.tutorIds.includes(userStore.userInfo?.id || ''))
+      !(
+        Array.isArray(assignment.tutorIds) &&
+        assignment.tutorIds.includes(userStore.userInfo?.id || '')
+      )
     ) {
       return false;
     }
     const matchesQuery = !query || assignment.name.toLowerCase().includes(query);
-    const matchesType = !typeFilter.value || assignment.type === typeFilter.value;
-    const matchesStatus = !statusFilter.value || assignment.aiDeclarationStatus === statusFilter.value;
+    const typeFilters = typeFilter.value;
+    const matchesType =
+      !typeFilters.length || typeFilters.includes((assignment.type || '') as AssignmentType);
+    const statusFilters = statusFilter.value;
+    const matchesStatus =
+      !statusFilters.length || statusFilters.includes(assignment.aiDeclarationStatus);
     return matchesQuery && matchesType && matchesStatus;
   });
 });
 
 function statusTagType(status: string) {
-  if (status === 'published') return 'success';
-  if (status === 'draft') return 'warning';
+  if (status === 'published') {
+    return 'success';
+  }
+  if (status === 'draft') {
+    return 'warning';
+  }
   return 'info';
 }
 
@@ -427,13 +467,11 @@ function resolveTutors(ids: string[] = []) {
 }
 
 
-function onCourseChange() {
-  searchQuery.value = '';
-  typeFilter.value = '';
-  statusFilter.value = '';
-}
-
 function openCreateDialog() {
+  if (!canManageAssignments.value) {
+    ElMessage.error('You do not have permission to create assignments.');
+    return;
+  }
   resetForm();
   assignmentDialogVisible.value = true;
 }
@@ -483,6 +521,10 @@ function saveTypeManager() {
 }
 
 function openEditDialog(assignment: Assignment) {
+  if (!canManageAssignments.value) {
+    ElMessage.error('You do not have permission to edit assignments.');
+    return;
+  }
   assignmentForm.id = assignment.id;
   assignmentForm.courseId = assignment.courseId;
   assignmentForm.name = assignment.name;
@@ -493,34 +535,55 @@ function openEditDialog(assignment: Assignment) {
 
 function resetForm() {
   assignmentForm.id = '';
-  assignmentForm.courseId = selectedCourseId.value || '';
+  assignmentForm.courseId = selectedCourseIds.value[0] || '';
   assignmentForm.name = '';
   assignmentForm.type = '';
   assignmentForm.tutorIds = [];
 }
 
 function submitAssignment() {
+  if (!canManageAssignments.value) {
+    ElMessage.error('You do not have permission to modify assignments.');
+    assignmentDialogVisible.value = false;
+    return;
+  }
   assignmentFormRef.value?.validate(async (valid) => {
-    if (!valid) return;
+    if (!valid) {
+      return;
+    }
     const payload = {
       courseId: assignmentForm.courseId,
       name: assignmentForm.name,
       type: assignmentForm.type as AssignmentType,
       tutorIds: assignmentForm.tutorIds,
     };
-    if (assignmentForm.id) {
-      await dataStore.updateAssignment(assignmentForm.id, payload);
-      ElMessage.success('Assignment updated.');
-    } else {
-      const created = (await dataStore.addAssignment(payload)) as Assignment;
-      selectedCourseId.value = created.courseId;
-      ElMessage.success('Assignment created.');
+    try {
+      if (assignmentForm.id) {
+        await dataStore.updateAssignment(assignmentForm.id, payload);
+        ElMessage.success('Assignment updated.');
+      } else {
+        const created = (await dataStore.addAssignment(payload)) as Assignment;
+        if (!selectedCourseIds.value.includes(created.courseId)) {
+          selectedCourseIds.value = [...selectedCourseIds.value, created.courseId];
+        }
+        ElMessage.success('Assignment created.');
+      }
+      assignmentDialogVisible.value = false;
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        'You do not have permission to perform this action.',
+      );
+      ElMessage.error(message);
     }
-    assignmentDialogVisible.value = false;
   });
 }
 
 function confirmDelete(assignment: Assignment) {
+  if (!canManageAssignments.value) {
+    ElMessage.error('You do not have permission to delete assignments.');
+    return;
+  }
   ElMessageBox.confirm(
     `Delete assignment “${assignment.name}”? Related templates will be removed as well.`,
     'Delete assignment',
@@ -542,7 +605,9 @@ function goToTemplate(assignment: Assignment) {
 }
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) {
+    return '—';
+  }
   return new Intl.DateTimeFormat('en-AU', {
     year: 'numeric',
     month: 'short',
@@ -554,17 +619,64 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
-.assignments-page { display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.subtitle { margin: 4px 0 0; color: #606266; font-size: 14px; }
-.filters { padding: 12px 16px; }
-.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.filter-item { width: 240px; }
-.tag { margin: 2px; }
-.muted { color: #909399; font-size: 13px; }
-.timestamp { color: #909399; font-size: 12px; margin-top: 4px; }
-.type-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.type-tag { cursor: default; }
-.reset-button { margin-right: auto; }
-.empty-message { margin: 12px 0; padding: 12px; border: 1px dashed #ccc; background: #fff; text-align: center; color: #666; }
+.assignments-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+.filters {
+  padding: 12px 16px;
+}
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-item {
+  width: 240px;
+}
+.tag {
+  margin: 2px;
+}
+.muted {
+  color: #909399;
+  font-size: 13px;
+}
+.timestamp {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.type-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.type-tag {
+  cursor: default;
+}
+.reset-button {
+  margin-right: auto;
+}
+.empty-message {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed #ccc;
+  background: #fff;
+  text-align: center;
+  color: #666;
+}
 </style>

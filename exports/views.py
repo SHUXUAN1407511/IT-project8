@@ -1,7 +1,9 @@
 from io import BytesIO
 from django.http import HttpResponse
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated  # 如不需要登录可移除
+
+from usersystem.permissions import ActiveUserPermission
+
 from .serializer import ExportTableSerializer
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -12,7 +14,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 import pandas as pd
 
 class ExportExcelView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [ActiveUserPermission]
 
     def post(self, request):
         ser = ExportTableSerializer(data=request.data)
@@ -35,13 +37,19 @@ class ExportExcelView(APIView):
             ws = writer.sheets[sheet_name]
             max_col = df.shape[1]
             from openpyxl.styles import Alignment, Font
-            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col if max_col else 1)
+            ws.merge_cells(
+                start_row=1,
+                start_column=1,
+                end_row=1,
+                end_column=max_col if max_col else 1,
+            )
             cell = ws.cell(row=1, column=1, value=title)
             cell.font = Font(size=14, bold=True)
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
             for idx, col in enumerate(df.columns, start=1):
-                max_len = max([len(str(x)) if x is not None else 0 for x in df[col]] + [len(col), 4])
+                value_lengths = [len(str(x)) if x is not None else 0 for x in df[col]]
+                max_len = max(value_lengths + [len(col), 4])
                 ws.column_dimensions[chr(64 + idx)].width = min(max_len + 2, 60)
 
         bio.seek(0)
@@ -55,7 +63,7 @@ class ExportExcelView(APIView):
 
 
 class ExportPDFView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [ActiveUserPermission]
     def post(self, request):
         ser = ExportTableSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -77,7 +85,14 @@ class ExportPDFView(APIView):
         # Setup landscape A4
         pagesize = landscape(A4)
         bio = BytesIO()
-        doc = SimpleDocTemplate(bio, pagesize=pagesize, leftMargin=24, rightMargin=24, topMargin=28, bottomMargin=24)
+        doc = SimpleDocTemplate(
+            bio,
+            pagesize=pagesize,
+            leftMargin=24,
+            rightMargin=24,
+            topMargin=28,
+            bottomMargin=24,
+        )
 
         # Use default English style
         styles = getSampleStyleSheet()

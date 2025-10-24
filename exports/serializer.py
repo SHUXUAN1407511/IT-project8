@@ -8,5 +8,12 @@ class ExportTableSerializer(serializers.Serializer):
         data = attrs['data']
         lengths = {k: len(v) for k, v in data.items()}
         if len(set(lengths.values())) > 1:
-            raise serializers.ValidationError({'data': f'All columns must have the same length, got: {lengths}'})
+            raise serializers.ValidationError(
+                {
+                    'data': (
+                        'All columns must have the same length, '
+                        f'got: {lengths}'
+                    )
+                }
+            )
         return attrs

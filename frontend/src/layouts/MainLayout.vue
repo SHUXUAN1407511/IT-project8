@@ -36,7 +36,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useUserStore, type UserRole } from '@/store/user';
+import { useUserStore, type UserRole } from '@/store/useUserStore';
 import HelpHint from '@/components/HelpHint.vue';
 
 const router = useRouter();
@@ -61,11 +61,15 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/settings', label: 'Account settings', roles: ['admin', 'sc', 'tutor'] },
 ];
 
-const menus = computed(() => MENU_ITEMS.filter((item) => item.roles.includes(userStore.role as UserRole)));
+const menus = computed(() =>
+  MENU_ITEMS.filter((item) => item.roles.includes(userStore.role as UserRole)),
+);
 
 const activeMenu = computed(() => {
   const currentPath = route.path;
-  const matched = MENU_ITEMS.find((item) => currentPath === item.path || currentPath.startsWith(item.path + '/'));
+  const matched = MENU_ITEMS.find(
+    (item) => currentPath === item.path || currentPath.startsWith(`${item.path}/`),
+  );
   return matched ? matched.path : currentPath;
 });
 
@@ -101,19 +105,51 @@ const currentHint = computed(() => {
   return hintMap[key] || hintMap.default;
 });
 
-function logout() {
-  userStore.logout();
-  router.push({ name: 'Login' });
+async function logout() {
+  try {
+    await userStore.logout();
+  } finally {
+    router.push({ name: 'Login' });
+  }
 }
 </script>
 
 <style scoped>
-.layout { height: 100vh; }
-.aside { border-right: 1px solid #ebeef5; }
-.logo { height: 56px; display: flex; align-items: center; padding: 0 16px; font-weight: 600; }
-.header { display: flex; align-items: center; justify-content: flex-end; border-bottom: 1px solid #ebeef5; padding: 0 16px; }
-.main { padding: 16px; }
-.user { display: flex; gap: 12px; align-items: center; }
-.info { display: flex; flex-direction: column; align-items: flex-end; }
-.role { color: #909399; font-size: 12px; }
+.layout {
+  height: 100vh;
+}
+.aside {
+  border-right: 1px solid #ebeef5;
+}
+.logo {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-weight: 600;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-bottom: 1px solid #ebeef5;
+  padding: 0 16px;
+}
+.main {
+  padding: 16px;
+}
+.user {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.role {
+  color: #909399;
+  font-size: 12px;
+}
 </style>

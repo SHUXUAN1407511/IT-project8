@@ -2,7 +2,7 @@ from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Q
-from rest_framework import viewsets, permissions, filters, status
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -15,31 +15,32 @@ from .serializer import (
     SaveScaleVersionRequestSerializer,
 )
 from usersystem.models import User
+from usersystem.permissions import ActiveUserPermission, RolePermission, resolve_active_user
 from notifications.services import send_notifications
 from notifications.utils import user_display_name
+from Assignment.models import Assignment
 
 
-# -------------------------
-# 公共分页器
-# -------------------------
 class DefaultPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = "page_size"
     max_page_size = 100
 
 
-# -------------------------
-# 旧接口：/scales/（兼容 /aiusescale/）
-# -------------------------
 class AIUserScaleViewSet(viewsets.ModelViewSet):
     queryset = AIUserScale.objects.all()
     serializer_class = AIUserScaleSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [ActiveUserPermission, RolePermission]
     pagination_class = DefaultPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "notes"]
     ordering_fields = ["created_at", "updated_at", "name", "level"]
     ordering = ["-updated_at"]
+    role_permissions = {
+        "list": ["admin", "sc"],
+        "retrieve": ["admin", "sc"],
+        "default": ["admin", "sc"],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -72,21 +73,19 @@ class AIUserScaleViewSet(viewsets.ModelViewSet):
 
 
 class ScaleRecordViewSet(viewsets.ModelViewSet):
-    """
-    - GET /scale-records/?ownerType=&ownerId=&isPublic=1
-    - POST /scale-records/
-    - PUT/PATCH /scale-records/:id/
-    - DELETE /scale-records/:id/
-    - POST /scale-records/save_version   (SaveScaleVersionRequest)
-    """
     queryset = ScaleRecord.objects.all().prefetch_related("versions__levels")
     serializer_class = ScaleRecordSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [ActiveUserPermission, RolePermission]
     pagination_class = DefaultPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name"]
     ordering_fields = ["updated_at", "created_at", "name"]
     ordering = ["-updated_at"]
+    role_permissions = {
+        "list": ["admin", "sc"],
+        "retrieve": ["admin", "sc"],
+        "default": ["admin", "sc"],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -132,53 +131,7 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def _resolve_request_user(self, request):
-        """
-        Try to resolve the business user making the request.
-        Mirrors the assignment viewset logic so that front-end hints keep working.
-        """
-        django_user = getattr(request, "user", None)
-        if getattr(django_user, "is_authenticated", False):
-            if hasattr(django_user, "role"):
-                return django_user
-            username = getattr(django_user, "username", None)
-            if username:
-                try:
-                    return User.objects.get(username=username)
-                except User.DoesNotExist:
-                    pass
-
-        candidate_ids = [
-            request.headers.get("X-User-Id"),
-            request.headers.get("X_USER_ID"),
-            request.headers.get("X-USER-ID"),
-            request.query_params.get("userId"),
-            getattr(request.data, "get", lambda _key, _default=None: _default)("userId"),
-        ]
-        for candidate in candidate_ids:
-            if not candidate:
-                continue
-            try:
-                return User.objects.get(pk=candidate)
-            except (User.DoesNotExist, ValueError, TypeError):
-                continue
-
-        candidate_usernames = [
-            request.headers.get("X-User-Username"),
-            request.headers.get("X-User-Name"),
-            request.headers.get("X_USER_NAME"),
-            request.headers.get("X-USERNAME"),
-            request.query_params.get("username"),
-            getattr(request.data, "get", lambda _key, _default=None: _default)("username"),
-        ]
-        for candidate in candidate_usernames:
-            if not candidate:
-                continue
-            try:
-                return User.objects.get(username=candidate)
-            except User.DoesNotExist:
-                continue
-
-        return None
+        return resolve_active_user(request)
 
     def _owner_key_for(self, user):
         username = getattr(user, "username", None)
@@ -250,11 +203,6 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, url_path="sc-view")
     def sc_view(self, request, *args, **kwargs):
-        """
-        Returns data grouped for SC dashboard usage:
-        - defaultRecords: all system-owned scales (admin maintained)
-        - personalRecord: the caller's private copy, if it exists
-        """
         user = self._resolve_request_user(request)
         if not user or getattr(user, "role", None) != "sc":
             raise PermissionDenied("Only SC users can access this view.")
@@ -288,15 +236,6 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=False, url_path="save_version")
     def save_version(self, request, *args, **kwargs):
-        """
-        SaveScaleVersionRequest：
-        {
-          "scaleId": "uuid",
-          "levels": [{ id,label,title?,description?,aiUsage?,instructions?,acknowledgement? }, ...],
-          "notes": "optional",
-          "updatedBy": "optional string"
-        }
-        """
         serializer = SaveScaleVersionRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -304,23 +243,15 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
         record_id = data["scaleId"]
         notes = data.get("notes")
         levels = data["levels"]
-        updated_by = data.get("updatedBy") or (
-            getattr(getattr(request, "user", None), "username", None) or "system"
-        )
+        acting_user = self._resolve_request_user(request)
+        if not acting_user:
+            raise PermissionDenied("Authentication required.")
+        updated_by = data.get("updatedBy") or getattr(acting_user, "username", "system")
 
         try:
             record = ScaleRecord.objects.get(pk=record_id)
         except ScaleRecord.DoesNotExist:
             return Response({"detail": "ScaleRecord not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        acting_user = self._resolve_request_user(request)
-        if not acting_user and updated_by and updated_by != "system":
-            try:
-                acting_user = User.objects.get(username=updated_by)
-            except User.DoesNotExist:
-                acting_user = None
-        if acting_user and not data.get("updatedBy"):
-            updated_by = getattr(acting_user, "username", updated_by)
 
         record_owner = record.owner_type
 
@@ -339,6 +270,19 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You can only save versions of your own scale.")
         elif acting_user and getattr(acting_user, "role", None) != "admin":
             raise PermissionDenied("You do not have permission to modify this scale.")
+
+        owner_user = None
+        if record.owner_type == ScaleRecord.OWNER_SC and record.owner_id:
+            owner_lookup = Q(username=record.owner_id)
+            try:
+                owner_lookup |= Q(pk=int(record.owner_id))
+            except (TypeError, ValueError):
+                pass
+            owner_user = (
+                User.objects.filter(role="sc", status=User.STATUS_ACTIVE)
+                .filter(owner_lookup)
+                .first()
+            )
 
         with transaction.atomic():
             last = record.versions.order_by("-version").first()
@@ -368,15 +312,12 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
                 )
             ScaleLevel.objects.bulk_create(bulk_levels)
 
-        actor_name = user_display_name(acting_user, default=(updated_by or "system"))
+        actor_for_notifications = acting_user or owner_user
+        actor_name = user_display_name(actor_for_notifications, default=(updated_by or "system"))
         version_label = f"v{next_version_num}"
         response_payload = ScaleRecordSerializer(record).data
 
-        if (
-            acting_user
-            and getattr(acting_user, "role", None) == "admin"
-            and record.owner_type == ScaleRecord.OWNER_SYSTEM
-        ):
+        if record.owner_type == ScaleRecord.OWNER_SYSTEM:
             recipients = User.objects.filter(
                 role__in=["admin", "sc"],
                 status=User.STATUS_ACTIVE,
@@ -394,34 +335,79 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
                 related_type="scale",
                 related_id=str(record.id),
             )
-        elif (
-            acting_user
-            and getattr(acting_user, "role", None) == "sc"
-            and record.owner_type == ScaleRecord.OWNER_SC
-        ):
-            sc_identifiers = {
-                value
-                for value in [
-                    str(getattr(acting_user, "pk", "")),
-                    getattr(acting_user, "username", ""),
-                ]
-                if value
-            }
-            tutors = (
+        elif record.owner_type == ScaleRecord.OWNER_SC:
+            sc_identifiers = set()
+            if record.owner_id:
+                sc_identifiers.add(str(record.owner_id))
+            if owner_user:
+                sc_identifiers.add(str(getattr(owner_user, "pk", "")))
+                username = getattr(owner_user, "username", "")
+                if username:
+                    sc_identifiers.add(username)
+            if acting_user and getattr(acting_user, "role", None) == "sc":
+                sc_identifiers.add(str(getattr(acting_user, "pk", "")))
+                username = getattr(acting_user, "username", "")
+                if username:
+                    sc_identifiers.add(username)
+            sc_identifiers = {value for value in sc_identifiers if value}
+
+            pk_identifiers: set[int] = set()
+            username_identifiers: set[str] = set()
+            for value in sc_identifiers:
+                try:
+                    pk_identifiers.add(int(value))
+                except (TypeError, ValueError):
+                    if value:
+                        username_identifiers.add(value)
+
+            assignment_qs = Assignment.objects.filter(
+                Q(course__coordinator__pk__in=pk_identifiers)
+                | Q(course__coordinator__username__in=username_identifiers)
+            ).prefetch_related("tutors")
+            tutor_candidates = set()
+            for assignment in assignment_qs:
+                for tutor in assignment.tutors.all():
+                    if getattr(tutor, "status", None) == User.STATUS_ACTIVE:
+                        tutor_candidates.add(tutor.pk)
+
+            recipients = []
+            if tutor_candidates:
+                recipients.extend(
+                    User.objects.filter(
+                        pk__in=tutor_candidates,
+                        role="tutor",
+                        status=User.STATUS_ACTIVE,
+                    )
+                )
+
+            fallback_tutors = (
                 User.objects.filter(
                     role="tutor",
                     status=User.STATUS_ACTIVE,
-                    assignments__course__coordinator__in=sc_identifiers,
+                )
+                .filter(
+                    Q(assignments__course__coordinator__pk__in=pk_identifiers)
+                    | Q(assignments__course__coordinator__username__in=username_identifiers)
                 )
                 .distinct()
             )
+            existing_ids = {getattr(user, "pk", None) for user in recipients}
+            for tutor in fallback_tutors:
+                pk = getattr(tutor, "pk", None)
+                if pk is None or pk in existing_ids:
+                    continue
+                recipients.append(tutor)
+                existing_ids.add(pk)
+
+            if owner_user and getattr(owner_user, "status", None) == User.STATUS_ACTIVE:
+                recipients.append(owner_user)
             title = "Coordinator AI use scale updated"
             content = (
                 f"{actor_name} published {version_label} of their AI use scale "
                 f"\"{record.name}\". Please review related templates."
             )
             send_notifications(
-                tutors,
+                recipients,
                 title=title,
                 content=content,
                 body=notes or "",

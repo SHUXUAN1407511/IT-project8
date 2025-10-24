@@ -28,13 +28,17 @@ const fallbackOrigin =
 
 function resolveApiBase(raw?: string) {
   const trimmed = (raw || '').trim();
-  if (!trimmed) return fallbackOrigin;
+  if (!trimmed) {
+    return fallbackOrigin;
+  }
   const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
   const withoutApi = withoutTrailingSlash.endsWith('/api')
     ? withoutTrailingSlash.slice(0, -4)
     : withoutTrailingSlash;
 
-  if (!withoutApi) return fallbackOrigin;
+  if (!withoutApi) {
+    return fallbackOrigin;
+  }
   if (/^https?:\/\//.test(withoutApi)) {
     return withoutApi;
   }
