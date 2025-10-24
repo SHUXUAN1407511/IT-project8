@@ -8,11 +8,9 @@ test('diagnose current page structure', async ({ page }) => {
   console.log('URL:', page.url());
   console.log('Title:', await page.title());
   
-  // 检查所有元素
   const allElements = await page.locator('*').all();
   console.log('Total elements:', allElements.length);
   
-  // 检查特定元素类型
   const headings = await page.locator('h1, h2, h3, h4, h5, h6').all();
   console.log('Headings found:', headings.length);
   for (let i = 0; i < headings.length; i++) {
@@ -45,10 +43,8 @@ test('diagnose current page structure', async ({ page }) => {
     console.log(`Link ${i}: href=${href}, text=${text}`);
   }
   
-  // 截图当前页面
   await page.screenshot({ path: 'current-page-diagnosis.png' });
   
-  // 检查注册页面
   await page.goto('http://localhost:5174/register');
   await page.waitForTimeout(2000);
   console.log('=== REGISTRATION PAGE ===');
