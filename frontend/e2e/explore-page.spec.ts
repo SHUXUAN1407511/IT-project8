@@ -4,14 +4,11 @@ test('explore page structure', async ({ page }) => {
   await page.goto('http://localhost:5174');
   await page.waitForTimeout(3000);
   
-  // 截图当前页面
   await page.screenshot({ path: 'explore-homepage.png' });
   
-  // 获取所有可见元素的信息
   console.log('=== PAGE ANALYSIS ===');
   console.log('Title:', await page.title());
   
-  // 检查各种元素
   const buttons = await page.locator('button').all();
   console.log('Buttons found:', buttons.length);
   for (let i = 0; i < buttons.length; i++) {
@@ -36,7 +33,6 @@ test('explore page structure', async ({ page }) => {
     console.log(`Link ${i}: href=${href}, text=${text}`);
   }
   
-  // 检查是否有特定类名或ID的元素
   const selectors = ['#app', '.login', '.dashboard', '.container', '.main', '.header', '.navigation', '.nav'];
   for (const selector of selectors) {
     const element = page.locator(selector);
@@ -46,7 +42,6 @@ test('explore page structure', async ({ page }) => {
     }
   }
   
-  // 检查页面文本内容
   const bodyText = await page.locator('body').textContent();
   console.log('Body text sample:', bodyText?.substring(0, 200));
 });
