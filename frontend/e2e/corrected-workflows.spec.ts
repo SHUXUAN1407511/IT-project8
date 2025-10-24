@@ -25,21 +25,17 @@ test.describe('User Authentication Flow', () => {
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
-    // 填写注册表单
     await page.fill('input[placeholder="Choose a username"]', 'testuser_' + Date.now());
     await page.fill('input[placeholder="Create a password"]', 'Test123!');
     await page.fill('input[placeholder="Re-enter password"]', 'Test123!');
     
-    // 选择角色
     const selectWrapper = page.locator('.el-select').first();
     await selectWrapper.click();
     await page.waitForTimeout(1000);
     
-    // 选择第一个角色（Administrator）
     await page.locator('.el-select-dropdown__item:has-text("Administrator")').first().click();
     await page.waitForTimeout(1000);
     
-    // 点击创建账户按钮
     const createAccountButton = page.locator('button:has-text("Create Account")');
     await createAccountButton.click();
     
@@ -53,7 +49,6 @@ test.describe('User Authentication Flow', () => {
     
     const timestamp = Date.now();
     
-    // 测试 Subject Coordinator 角色
     await page.fill('input[placeholder="Choose a username"]', 'coordinator_' + timestamp);
     await page.fill('input[placeholder="Create a password"]', 'Coordinator123!');
     await page.fill('input[placeholder="Re-enter password"]', 'Coordinator123!');
@@ -74,12 +69,10 @@ test.describe('User Authentication Flow', () => {
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
-    // 尝试空表单提交
     await page.locator('button:has-text("Create Account")').click();
     await page.waitForTimeout(1000);
     await page.screenshot({ path: 'empty-form-validation.png' });
     
-    // 测试密码不匹配
     await page.fill('input[placeholder="Choose a username"]', 'testuser');
     await page.fill('input[placeholder="Create a password"]', 'Password123');
     await page.fill('input[placeholder="Re-enter password"]', 'DifferentPassword');
@@ -100,12 +93,10 @@ test.describe('Navigation Flow', () => {
     await page.goto('http://localhost:5174');
     await page.waitForTimeout(1000);
     
-    // 去注册页面
     await page.click('a[href="/register"]');
     await page.waitForTimeout(2000);
     await expect(page).toHaveURL('http://localhost:5174/register');
     
-    // 返回登录页面
     await page.click('text=Back to sign in');
     await page.waitForTimeout(2000);
     await expect(page).toHaveURL('http://localhost:5174');
@@ -131,7 +122,6 @@ test.describe('Complete User Journey', () => {
     
     console.log(`Testing with username: ${testUsername}`);
     
-    // 1. 注册新用户
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
@@ -139,7 +129,6 @@ test.describe('Complete User Journey', () => {
     await page.fill('input[placeholder="Create a password"]', testPassword);
     await page.fill('input[placeholder="Re-enter password"]', testPassword);
     
-    // 选择角色
     await page.locator('.el-select').first().click();
     await page.waitForTimeout(1000);
     await page.locator('.el-select-dropdown__item:has-text("Tutor")').first().click();
@@ -149,7 +138,6 @@ test.describe('Complete User Journey', () => {
     await page.waitForTimeout(3000);
     await page.screenshot({ path: 'journey-registration.png' });
     
-    // 2. 登录新创建的用户
     await page.goto('http://localhost:5174');
     await page.waitForTimeout(1000);
     
