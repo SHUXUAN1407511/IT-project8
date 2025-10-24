@@ -5,7 +5,6 @@ test.describe('User Authentication Flow', () => {
     await page.goto('http://localhost:5174');
     await page.waitForTimeout(2000);
     
-    // 移除 h1 检查，直接测试表单
     const usernameInput = page.locator('input[placeholder="e.g. sc.user"]');
     const passwordInput = page.locator('input[placeholder="Enter password"]');
     const loginButton = page.locator('button:has-text("Sign In")');
@@ -48,7 +47,6 @@ test.describe('User Authentication Flow', () => {
 
 test.describe('Complete User Workflow', () => {
   test('complete user registration and login workflow', async ({ page }) => {
-    // 注册流程
     await page.goto('http://localhost:5174/register');
     await page.waitForTimeout(2000);
     
@@ -56,12 +54,10 @@ test.describe('Complete User Workflow', () => {
     await page.fill('input[placeholder="Create a password"]', 'Test123!');
     await page.fill('input[placeholder="Re-enter password"]', 'Test123!');
     
-    // 处理角色选择框
     const roleSelector = page.locator('input[role="combobox"]');
     await roleSelector.click();
     await page.waitForTimeout(500);
     
-    // 选择第一个选项
     const firstOption = page.locator('.el-select-dropdown__item').first();
     await firstOption.click();
     
@@ -71,7 +67,6 @@ test.describe('Complete User Workflow', () => {
     await page.waitForTimeout(3000);
     await page.screenshot({ path: 'after-registration.png' });
     
-    // 登录流程
     await page.goto('http://localhost:5174');
     await page.waitForTimeout(1000);
     
@@ -106,7 +101,6 @@ test.describe('Registration Form Tests', () => {
     await page.fill('input[placeholder="Create a password"]', 'SecurePass123!');
     await page.fill('input[placeholder="Re-enter password"]', 'SecurePass123!');
     
-    // 处理角色选择
     const roleSelector = page.locator('input[role="combobox"]');
     await roleSelector.click();
     await page.waitForTimeout(500);
@@ -133,7 +127,6 @@ test.describe('Registration Form Tests', () => {
     await page.fill('input[placeholder="Create a password"]', 'Password123');
     await page.fill('input[placeholder="Re-enter password"]', 'DifferentPassword');
     
-    // 处理角色选择
     const roleSelector = page.locator('input[role="combobox"]');
     await roleSelector.click();
     await page.waitForTimeout(500);
