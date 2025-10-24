@@ -384,6 +384,8 @@ export interface SaveTemplateRequest {
   assignmentId: string;
   rows: TemplateRow[];
   publish?: boolean;
+  updatedBy?: string;
+  updatedById?: string;
 }
 
 export const TemplatesAPI = {
@@ -404,8 +406,8 @@ export const TemplatesAPI = {
    * POST /assignments/:assignmentId/template/publish：发布模板时调用。
    * 建议返回最新 TemplateRecord（`isPublished=true`，`lastPublishedAt` 更新），便于前端同步状态。
    */
-  publish(assignmentId: string) {
-    return http.post<void>(`/assignments/${assignmentId}/template/publish`);
+  publish(assignmentId: string, payload?: { updatedBy?: string; updatedById?: string }) {
+    return http.post<void>(`/assignments/${assignmentId}/template/publish`, payload);
   },
   /**
    * POST /assignments/:assignmentId/template/unpublish：撤回模板发布时调用。

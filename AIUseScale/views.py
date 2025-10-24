@@ -3,8 +3,8 @@ from uuid import UUID
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import viewsets, permissions, filters, status
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 
@@ -15,6 +15,8 @@ from .serializer import (
     SaveScaleVersionRequestSerializer,
 )
 from usersystem.models import User
+from notifications.services import send_notifications
+from notifications.utils import user_display_name
 
 
 # -------------------------
@@ -366,4 +368,65 @@ class ScaleRecordViewSet(viewsets.ModelViewSet):
                 )
             ScaleLevel.objects.bulk_create(bulk_levels)
 
-        return Response(ScaleRecordSerializer(record).data, status=status.HTTP_201_CREATED)
+        actor_name = user_display_name(acting_user, default=(updated_by or "system"))
+        version_label = f"v{next_version_num}"
+        response_payload = ScaleRecordSerializer(record).data
+
+        if (
+            acting_user
+            and getattr(acting_user, "role", None) == "admin"
+            and record.owner_type == ScaleRecord.OWNER_SYSTEM
+        ):
+            recipients = User.objects.filter(
+                role__in=["admin", "sc"],
+                status=User.STATUS_ACTIVE,
+            )
+            title = "System AI use scale updated"
+            content = (
+                f"{actor_name} published {version_label} of the system AI use scale "
+                f"\"{record.name}\"."
+            )
+            send_notifications(
+                recipients,
+                title=title,
+                content=content,
+                body=notes or "",
+                related_type="scale",
+                related_id=str(record.id),
+            )
+        elif (
+            acting_user
+            and getattr(acting_user, "role", None) == "sc"
+            and record.owner_type == ScaleRecord.OWNER_SC
+        ):
+            sc_identifiers = {
+                value
+                for value in [
+                    str(getattr(acting_user, "pk", "")),
+                    getattr(acting_user, "username", ""),
+                ]
+                if value
+            }
+            tutors = (
+                User.objects.filter(
+                    role="tutor",
+                    status=User.STATUS_ACTIVE,
+                    assignments__course__coordinator__in=sc_identifiers,
+                )
+                .distinct()
+            )
+            title = "Coordinator AI use scale updated"
+            content = (
+                f"{actor_name} published {version_label} of their AI use scale "
+                f"\"{record.name}\". Please review related templates."
+            )
+            send_notifications(
+                tutors,
+                title=title,
+                content=content,
+                body=notes or "",
+                related_type="scale",
+                related_id=str(record.id),
+            )
+
+        return Response(response_payload, status=status.HTTP_201_CREATED)
