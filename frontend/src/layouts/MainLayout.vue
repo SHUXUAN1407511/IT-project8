@@ -87,17 +87,17 @@ const roleLabel = computed(() => {
 });
 
 const hintMap: Record<string, string> = {
-  AdminDashboard: 'AdminDashboard.',
-  AdminUserManagement: 'AdminUserManagement.',
-  CourseManagement: 'CourseManagement.',
-  AssignmentManagement: 'AssignmentManagement.',
-  TemplateEditor: 'TemplateEditor.',
-  ScaleManagement: 'ScaleManagement.',
-  NotificationCenter: 'NotificationCenter.',
-  Settings: 'Settings.',
-  SCDashboard: 'SCDashboard.',
-  TutorDashboard: 'TutorDashboard.',
-  default: 'default.',
+  AdminDashboard: 'Get a snapshot of platform activity, default scale status, and recent notices.',
+  AdminUserManagement: 'Search, filter, and update user accounts, roles, and access permissions.',
+  CourseManagement: 'Review subjects you coordinate and adjust AI declaration settings per course.',
+  AssignmentManagement: 'Create and monitor assignments, templates, and declaration workflows.',
+  TemplateEditor: 'Edit the AI use declaration template for the selected assignment before publishing.',
+  ScaleManagement: 'Version and publish the AI Use Scale that underpins your declarations.',
+  NotificationCenter: 'Read announcements, mark updates as read, and keep track of key changes.',
+  Settings: 'Update your profile details, password, and notification preferences.',
+  SCDashboard: 'Track coordinator-specific metrics, upcoming deadlines, and submission signals.',
+  TutorDashboard: 'Review teaching allocations, pending declarations, and recent student activity.',
+  default: 'Need help? This panel gives a short description of each page you visit.',
 };
 
 const currentHint = computed(() => {
